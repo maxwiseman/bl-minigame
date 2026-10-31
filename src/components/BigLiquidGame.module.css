@@ -1,0 +1,19 @@
+.game {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 100dvh;
+}
+
+.game canvas {
+  image-rendering: pixelated;
+  box-shadow: 0 0 0 2px #ff8200;
+}
+
+.footer {
+  color: #5c6170;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+}
