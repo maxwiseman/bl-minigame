@@ -1,0 +1,156 @@
+.controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 420px;
+  padding: 0 20px;
+  box-sizing: border-box;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* D-pad: generous hit area around a chunky cross */
+.dpad {
+  width: 150px;
+  height: 150px;
+  display: grid;
+  place-items: center;
+  touch-action: none;
+}
+
+.cross {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  filter: drop-shadow(0 4px 0 #000);
+}
+
+.arm,
+.hub {
+  position: absolute;
+  background: #2b2f3a;
+}
+
+.arm {
+  width: 40px;
+  height: 40px;
+  transition: background 60ms;
+}
+
+.arm::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 0;
+  height: 0;
+  border: 7px solid transparent;
+  opacity: 0.55;
+}
+
+.up {
+  left: 40px;
+  top: 0;
+  border-radius: 6px 6px 0 0;
+}
+.up::after {
+  border-bottom-color: #8b90a0;
+  top: -7px;
+}
+
+.down {
+  left: 40px;
+  bottom: 0;
+  border-radius: 0 0 6px 6px;
+}
+.down::after {
+  border-top-color: #8b90a0;
+  bottom: -7px;
+}
+
+.left {
+  left: 0;
+  top: 40px;
+  border-radius: 6px 0 0 6px;
+}
+.left::after {
+  border-right-color: #8b90a0;
+  left: -7px;
+}
+
+.right {
+  right: 0;
+  top: 40px;
+  border-radius: 0 6px 6px 0;
+}
+.right::after {
+  border-left-color: #8b90a0;
+  right: -7px;
+}
+
+.hub {
+  left: 40px;
+  top: 40px;
+  width: 40px;
+  height: 40px;
+}
+
+.hub::after {
+  content: "";
+  position: absolute;
+  inset: 11px;
+  border-radius: 50%;
+  background: #22252e;
+}
+
+.arm.pressed {
+  background: #1d2028;
+}
+
+/* A sits higher than B for the classic diagonal */
+.buttons {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+}
+
+.buttonWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.a {
+  margin-bottom: 28px;
+}
+
+.button {
+  width: 62px;
+  height: 62px;
+  border: none;
+  border-radius: 50%;
+  background: #ff8200;
+  color: #4a2200;
+  font: 700 22px system-ui, sans-serif;
+  box-shadow: 0 5px 0 #a35300, 0 7px 0 #000;
+  touch-action: none;
+  cursor: pointer;
+  transition:
+    transform 60ms,
+    box-shadow 60ms;
+}
+
+.button.pressed {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 #a35300, 0 3px 0 #000;
+}
+
+.caption {
+  color: #5c6170;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+}

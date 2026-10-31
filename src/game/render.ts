@@ -78,7 +78,19 @@ function blink(state: GameState, hz: number = 2): boolean {
 /**
  * Render one frame of the game
  */
-export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
+/* Button names used in on-screen hints */
+const KEY_NAMES = {
+    keyboard: { action: "SPACE", mute: "M" },
+    touch: { action: "A", mute: "B" },
+};
+export type Controls = keyof typeof KEY_NAMES;
+let keys = KEY_NAMES.keyboard;
+
+/**
+ * @param controls which button names the hints should use
+ */
+export function render(ctx: CanvasRenderingContext2D, state: GameState, controls: Controls = "keyboard"): void {
+    keys = KEY_NAMES[controls];
     const cam = state.rocket.alt;
     ctx.imageSmoothingEnabled = false;
 
@@ -365,10 +377,10 @@ function drawTitle(ctx: CanvasRenderingContext2D, state: GameState) {
     drawText(ctx, "LIQUID", cx, 46, { scale: 4, color: PALETTE.o!, shadow: "#4a2200", align: "center" });
     drawText(ctx, "SSTA FLAGSHIP LIQUID ROCKET", cx, 72, { color: PALETTE.w!, align: "center" });
 
-    if (blink(state, 1.5)) drawText(ctx, "PRESS SPACE TO LOAD", cx, 92, { color: PALETTE.y!, align: "center" });
+    if (blink(state, 1.5)) drawText(ctx, `PRESS ${keys.action} TO LOAD`, cx, 92, { color: PALETTE.y!, align: "center" });
     if (state.best > 0) drawText(ctx, `BEST ${fmt(state.best)}`, cx, 102, { color: PALETTE.c!, align: "center" });
 
-    const lines = ["↑↓ THROTTLE", "←→ STEER", "SPACE CHUTE", "M MUTE"];
+    const lines = ["↑↓ THROTTLE", "←→ STEER", `${keys.action} CHUTE`, `${keys.mute} MUTE`];
     lines.forEach((l, i) => drawText(ctx, l, 8, 118 + i * 8, { color: PALETTE.w! }));
 }
 
@@ -414,14 +426,14 @@ function drawFill(ctx: CanvasRenderingContext2D, state: GameState) {
     });
 
     if (!state.fillStarted) {
-        drawText(ctx, "PRESS AND HOLD SPACE", VIEW_W / 2, 128, { color: PALETTE.w!, align: "center" });
+        drawText(ctx, `PRESS AND HOLD ${keys.action}`, VIEW_W / 2, 128, { color: PALETTE.w!, align: "center" });
         drawText(ctx, "LET GO IN THE GREEN BAND", VIEW_W / 2, 135, { color: PALETTE.w!, align: "center" });
-        if (blink(state, 1.5)) drawText(ctx, "PRESS SPACE TO BEGIN", VIEW_W / 2, 146, { color: PALETTE.y!, align: "center" });
+        if (blink(state, 1.5)) drawText(ctx, `PRESS ${keys.action} TO BEGIN`, VIEW_W / 2, 146, { color: PALETTE.y!, align: "center" });
     } else if (state.activeTank >= state.tanks.length) {
         const load = Math.max(0, Math.min(usableLevel(state.tanks[0].level), usableLevel(state.tanks[1].level)));
         drawText(ctx, `USABLE LOAD ${Math.round(load * 100)}%`, VIEW_W / 2, 146, { color: PALETTE.w!, align: "center" });
     } else {
-        drawText(ctx, "PRESS AND HOLD SPACE", VIEW_W / 2, 140, { color: PALETTE.g!, align: "center" });
+        drawText(ctx, `PRESS AND HOLD ${keys.action}`, VIEW_W / 2, 140, { color: PALETTE.g!, align: "center" });
         drawText(ctx, "LET GO IN THE GREEN BAND", VIEW_W / 2, 147, { color: PALETTE.g!, align: "center" });
     }
 }
@@ -479,7 +491,7 @@ function drawHud(ctx: CanvasRenderingContext2D, state: GameState) {
     if (q > 0.9 && rocket.burning) {
         if (blink(state, 3)) drawText(ctx, "THROTTLE DOWN!", VIEW_W / 2, 36, { color: q > 1 ? PALETTE.r! : PALETTE.y!, align: "center" });
     } else if (!rocket.burning) {
-        if (blink(state, 2)) drawText(ctx, "SPACE AT APOGEE", VIEW_W / 2, 36, { color: PALETTE.y!, align: "center" });
+        if (blink(state, 2)) drawText(ctx, `${keys.action} AT APOGEE`, VIEW_W / 2, 36, { color: PALETTE.y!, align: "center" });
     } else if (state.phaseTime < 6) {
         drawText(ctx, "↑↓ THROTTLE  ←→ STEER", VIEW_W / 2, 36, { align: "center" });
         drawText(ctx, "WATCH Q, GRAB DATA + FUEL", VIEW_W / 2, 44, { color: PALETTE.l!, align: "center" });
@@ -535,5 +547,5 @@ function drawResult(ctx: CanvasRenderingContext2D, state: GameState) {
     drawText(ctx, `BEST ${fmt(state.best)}`, 156, y, { color: PALETTE.c!, align: "right" });
     if (state.newBest && blink(state, 3)) drawText(ctx, "NEW BEST!", 24, y, { color: PALETTE.o! });
 
-    if (state.phaseTime > 0.8 && blink(state, 1.5)) drawText(ctx, "SPACE TO FLY AGAIN", cx, 152, { color: PALETTE.y!, align: "center" });
+    if (state.phaseTime > 0.8 && blink(state, 1.5)) drawText(ctx, `${keys.action} TO FLY AGAIN`, cx, 152, { color: PALETTE.y!, align: "center" });
 }
