@@ -1,9 +1,15 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
+const title = "Big Liquid: The Game";
+const description =
+  "Load the NOS and GOX, throttle through max Q, dodge birds, jets and space junk, and fly SSTA's Big Liquid rocket to 70,000 ft.";
+
 export const metadata: Metadata = {
-  title: "Big Liquid",
-  description: "Fly SSTA's Big Liquid rocket to 70,000 ft.",
+  title,
+  description,
+  openGraph: { title, description, type: "website" },
+  twitter: { card: "summary_large_image", title, description },
 };
 
 // No pinch/double-tap zoom getting in the way of the touch controls
