@@ -45,9 +45,10 @@
 }
 
 /* Flight pads sit the same distance in from either edge, whatever their shape */
+/* The steering bar is wider than a full pad (see .cross.horizontal), so it starts further out to keep the same centre */
 .steerZone {
   justify-items: start;
-  padding-left: var(--edge);
+  padding-left: calc(var(--edge) - (3 * var(--thick) - var(--pad)) / 2);
 }
 
 .throttleZone {
@@ -77,8 +78,9 @@
   filter: drop-shadow(0 4px 0 #000);
 }
 
-/* Single-axis pads trimmed to just their bar */
+/* Single-axis pads trimmed to just their bar, with square arms: three arms long, centred where a full pad would be */
 .cross.horizontal {
+  width: calc(3 * var(--thick));
   height: var(--thick);
 }
 .horizontal .left,
@@ -86,14 +88,29 @@
 .horizontal .hub {
   top: 0;
 }
+.horizontal .left,
+.horizontal .right {
+  width: var(--thick);
+}
+.horizontal .hub {
+  left: var(--thick);
+}
 
 .cross.vertical {
   width: var(--thick);
+  height: calc(3 * var(--thick));
 }
 .vertical .up,
 .vertical .down,
 .vertical .hub {
   left: 0;
+}
+.vertical .up,
+.vertical .down {
+  height: var(--thick);
+}
+.vertical .hub {
+  top: var(--thick);
 }
 
 .arm,
