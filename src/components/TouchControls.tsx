@@ -9,8 +9,10 @@ export type Direction = "up" | "down" | "left" | "right";
 const DIRECTIONS: Direction[] = ["up", "down", "left", "right"];
 /* Pixels from the pad's centre before a press counts */
 const DEAD_ZONE = 10;
-/* Up/down drive the throttle, so they need a press at least halfway along the arm (arms span 20-60px out) */
+/* Up/down drive the throttle, so a drag that starts on left/right has to reach halfway along the arm (arms span 20-60px out) */
 const THROTTLE_DEAD_ZONE = 40;
+/* Up/down for any other press */
+const THROTTLE_TAP_ZONE = 10;
 /* How far off-axis a press can be and still count, so corners give diagonals */
 const DIAGONAL = 0.4;
 
@@ -36,23 +38,30 @@ export default function TouchControls({ onDirection, onAction, onMute }: TouchCo
     };
 
     // Directions come from where the finger is on the pad, so sliding between arms works
+    // Whether the current press began on left/right alone, so sliding off them shouldn't easily catch the throttle
+    const steeringRef = useRef<boolean>(false);
+
     const trackPad = (event: PointerEvent<HTMLDivElement>) => {
         const rect = event.currentTarget.getBoundingClientRect();
         const dx = event.clientX - (rect.left + rect.width / 2);
         const dy = event.clientY - (rect.top + rect.height / 2);
+        const throttleZone = steeringRef.current ? THROTTLE_DEAD_ZONE : THROTTLE_TAP_ZONE;
         const next = new Set<Direction>();
         if (Math.hypot(dx, dy) > DEAD_ZONE) {
-            if (-dy > THROTTLE_DEAD_ZONE && -dy > Math.abs(dx) * DIAGONAL) next.add("up");
-            if (dy > THROTTLE_DEAD_ZONE && dy > Math.abs(dx) * DIAGONAL) next.add("down");
+            if (-dy > throttleZone && -dy > Math.abs(dx) * DIAGONAL) next.add("up");
+            if (dy > throttleZone && dy > Math.abs(dx) * DIAGONAL) next.add("down");
             if (-dx > Math.abs(dy) * DIAGONAL) next.add("left");
             if (dx > Math.abs(dy) * DIAGONAL) next.add("right");
         }
         setDirections(next);
+        return next;
     };
 
     const padDown = (event: PointerEvent<HTMLDivElement>) => {
         event.currentTarget.setPointerCapture(event.pointerId);
-        trackPad(event);
+        steeringRef.current = false;
+        const start = trackPad(event);
+        steeringRef.current = (start.has("left") || start.has("right")) && !start.has("up") && !start.has("down");
     };
     const padMove = (event: PointerEvent<HTMLDivElement>) => {
         if (event.currentTarget.hasPointerCapture(event.pointerId)) trackPad(event);
