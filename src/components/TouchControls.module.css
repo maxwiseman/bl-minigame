@@ -1,15 +1,61 @@
+/* Fills whatever height the screen leaves */
 .controls {
+  /* Gap between each screen edge and the pad on that side, shared by every layout so pads line up */
+  --edge: 48px;
+  flex: 1;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   width: 100%;
-  max-width: 420px;
-  padding: 0 20px;
+  padding-bottom: env(safe-area-inset-bottom);
   box-sizing: border-box;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+}
+
+.menu {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 480px;
+  /* The D-pad's hit area reaches 15px past the visible pad */
+  padding: 0 calc(var(--edge) - 15px);
+  box-sizing: border-box;
+}
+
+/* Steering | throttle or chute, each side touchable top to bottom */
+.flight {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-self: stretch;
+  width: 100%;
+  max-width: 480px;
+}
+
+.zone {
+  display: grid;
+  place-items: center;
+  touch-action: none;
+}
+
+/* Flight pads sit the same distance in from either edge, whatever their shape */
+.steerZone {
+  justify-items: start;
+  padding-left: var(--edge);
+}
+
+.throttleZone {
+  justify-items: end;
+  padding-right: var(--edge);
+}
+
+/* Chute button centred where the throttle bar was (bar 40px wide, button 62px) */
+.chuteZone {
+  justify-items: end;
+  padding-right: calc(var(--edge) - 11px);
 }
 
 /* D-pad: generous hit area around a chunky cross */
@@ -26,6 +72,25 @@
   width: 120px;
   height: 120px;
   filter: drop-shadow(0 4px 0 #000);
+}
+
+/* Single-axis pads trimmed to just their bar */
+.cross.horizontal {
+  height: 40px;
+}
+.horizontal .left,
+.horizontal .right,
+.horizontal .hub {
+  top: 0;
+}
+
+.cross.vertical {
+  width: 40px;
+}
+.vertical .up,
+.vertical .down,
+.vertical .hub {
+  left: 0;
 }
 
 .arm,
