@@ -10,9 +10,9 @@
 import { useEffect, useRef, useState } from "react";
 
 import {
-    createGame, density, eraseName, GameInput, GameState, setLeaderboard, typeName, update, VIEW_H, VIEW_W,
+    createGame, density, eraseName, GameInput, GameState, setLeaderboard, setName, typeName, update, VIEW_H, VIEW_W,
 } from "@/game/engine";
-import { LeaderboardEntry } from "@/game/leaderboard";
+import { LeaderboardEntry, NAME_MAX } from "@/game/leaderboard";
 import { render } from "@/game/render";
 import { Sfx } from "@/game/sound";
 
@@ -102,6 +102,8 @@ export default function BigLiquidGame() {
     // Read by the render loop, which is set up once
     const touchRef = useRef<boolean>(false);
     const stateRef = useRef<GameState | null>(null);
+    // Invisible field that brings up the phone keyboard for leaderboard names
+    const nameInputRef = useRef<HTMLInputElement>(null);
     const inputRef = useRef<GameInput>({ left: false, right: false, up: false, down: false, action: false, actionPressed: false });
     // Created on first press so audio always follows a user gesture
     const sfxRef = useRef<Sfx | null>(null);
@@ -126,6 +128,30 @@ export default function BigLiquidGame() {
     const toggleMute = () => {
         ensureSfx();
         sfxRef.current?.toggleMute();
+    };
+
+    const openKeyboard = () => {
+        const state = stateRef.current;
+        const field = nameInputRef.current;
+        if (!state?.entry || !field || !touchRef.current) return;
+        field.value = state.entry.chars.join("");
+        field.focus();
+    };
+
+    const onNameInput = () => {
+        const state = stateRef.current;
+        const field = nameInputRef.current;
+        if (!state?.entry || !field) return;
+        setName(state, field.value);
+        // Show only what made it into the name
+        field.value = state.entry.chars.join("");
+    };
+
+    const onNameKey = (event: React.KeyboardEvent<HTMLInputElement>) => {
+        if (event.key != "Enter") return;
+        event.preventDefault();
+        press("action", true);
+        press("action", false);
     };
 
     // B deletes while typing a leaderboard name, and mutes otherwise
@@ -167,8 +193,8 @@ export default function BigLiquidGame() {
         refreshBoard();
 
         const onKey = (event: KeyboardEvent) => {
-            // Leave browser/OS shortcuts alone
-            if (event.metaKey || event.ctrlKey) return;
+            // Leave browser/OS shortcuts and the phone name field alone
+            if (event.metaKey || event.ctrlKey || event.target == nameInputRef.current) return;
             const down = event.type == "keydown";
             event.preventDefault();
             // Typing a leaderboard name: letters go into the name rather than steering
@@ -228,6 +254,8 @@ export default function BigLiquidGame() {
                 lastPhase = state.phase;
                 if (state.phase == "fill") refreshBoard();
             }
+            // Put the phone keyboard away once the name is saved
+            if (!state.entry && document.activeElement == nameInputRef.current) nameInputRef.current?.blur();
             const outgoing = state.outbox;
             if (outgoing) {
                 state.outbox = null;
@@ -262,6 +290,20 @@ export default function BigLiquidGame() {
                 width={VIEW_W}
                 height={VIEW_H}
                 style={{ width: VIEW_W * scale, height: VIEW_H * scale }}
+                onClick={openKeyboard}
+            />
+            <input
+                ref={nameInputRef}
+                className={styles.nameInput}
+                aria-label="Leaderboard name"
+                maxLength={NAME_MAX}
+                autoCapitalize="characters"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                enterKeyHint="done"
+                onInput={onNameInput}
+                onKeyDown={onNameKey}
             />
             {touch ? (
                 <TouchControls onDirection={press} onAction={(down) => press("action", down)} onMute={pressB} />

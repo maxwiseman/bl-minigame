@@ -596,6 +596,16 @@ export function typeName(state: GameState, ch: string): void {
 }
 
 /**
+ * Replace the whole name (phone keyboard), dropping anything the font can't show
+ */
+export function setName(state: GameState, text: string): void {
+    const entry = state.entry;
+    if (!entry) return;
+    entry.chars = [...text.toUpperCase()].filter((c) => NAME_CHARS.includes(c)).slice(0, NAME_MAX);
+    entry.cursor = entry.chars.length;
+}
+
+/**
  * Delete during name entry: the character being edited, or the last one
  */
 export function eraseName(state: GameState): void {

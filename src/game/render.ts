@@ -81,8 +81,8 @@ function blink(state: GameState, hz: number = 2): boolean {
  */
 /* Button names used in on-screen hints */
 const KEY_NAMES = {
-    keyboard: { action: "SPACE", mute: "M", entry: "TYPE NAME - ENTER TO SAVE" },
-    touch: { action: "A", mute: "B", entry: "↑↓ LETTER ←→ MOVE B DEL A OK" },
+    keyboard: { action: "SPACE", mute: "M", entry: "TYPE NAME - ENTER TO SAVE", entryAlt: "" },
+    touch: { action: "A", mute: "B", entry: "↑↓ LETTER ←→ MOVE B DEL A OK", entryAlt: "OR TAP THE SCREEN TO TYPE" },
 };
 export type Controls = keyof typeof KEY_NAMES;
 let keys = KEY_NAMES.keyboard;
@@ -563,6 +563,7 @@ function drawResult(ctx: CanvasRenderingContext2D, state: GameState) {
     if (state.entry) {
         if (blink(state, 2)) drawText(ctx, "NEW HIGH SCORE!", cx, 204, { color: PALETTE.o!, align: "center" });
         drawText(ctx, keys.entry, cx, 213, { color: PALETTE.g!, align: "center" });
+        if (keys.entryAlt) drawText(ctx, keys.entryAlt, cx, 222, { color: PALETTE.c!, align: "center" });
     } else if (state.phaseTime > 0.8 && blink(state, 1.5)) {
         drawText(ctx, `${keys.action} TO FLY AGAIN`, cx, 222, { color: PALETTE.y!, align: "center" });
     }
