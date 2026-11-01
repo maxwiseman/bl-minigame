@@ -1,14 +1,14 @@
 "use client";
 
-import { PointerEvent, ReactNode, useEffect, useRef, useState } from "react";
+import { PointerEvent, useEffect, useRef, useState } from "react";
 
 import styles from "./TouchControls.module.css";
 
 export type Direction = "up" | "down" | "left" | "right";
 /**
  * menu: full D-pad with big A/B, for everything off the pad
- * throttle: steering pad, a small Select-style mute and the throttle pad, while the engine burns
- * coast: steering pad, the small mute and a big A for the chute, once it's out
+ * throttle: steering pad and throttle pad, while the engine burns
+ * coast: steering pad and a big A for the chute, once it's out
  */
 export type ControlLayout = "menu" | "throttle" | "coast";
 type Axes = "both" | "horizontal" | "vertical";
@@ -68,13 +68,10 @@ export default function TouchControls({ layout, onDirection, onAction, onMute }:
             ) : (
                 <div className={styles.flight}>
                     <Pad key="steer" axes="horizontal" onDirection={onDirection} />
-                    <div className={styles.small}>
-                        <HoldButton key="small-b" small label="B" caption="MUTE" onChange={onB} />
-                    </div>
                     {layout == "throttle" ? (
                         <Pad key="throttle" axes="vertical" onDirection={onDirection} />
                     ) : (
-                        <div className={styles.zone}>
+                        <div className={`${styles.zone} ${styles.chuteZone}`}>
                             <HoldButton key="chute" label="A" caption="CHUTE" onChange={onAction} />
                         </div>
                     )}
@@ -85,14 +82,15 @@ export default function TouchControls({ layout, onDirection, onAction, onMute }:
 }
 
 /**
- * D-pad limited to some axes. Directions come from where the finger is relative to the pad's centre,
- * so the whole element is touchable and sliding between arms works.
+ * D-pad limited to some axes. Directions come from where the finger is relative to the visible pad's centre,
+ * so the whole element around it is touchable and sliding between arms works.
  */
 function Pad({ axes, onDirection }: { axes: Axes; onDirection: (direction: Direction, down: boolean) => void }) {
     const [held, setHeld] = useState<Set<Direction>>(new Set());
     const heldRef = useRef<Set<Direction>>(held);
     // Whether the current press began on left/right alone, so sliding off them shouldn't easily catch the throttle
     const steeringRef = useRef<boolean>(false);
+    const crossRef = useRef<HTMLDivElement>(null);
     const directions = AXIS_DIRECTIONS[axes];
 
     const setDirections = (next: Set<Direction>) => {
@@ -113,7 +111,7 @@ function Pad({ axes, onDirection }: { axes: Axes; onDirection: (direction: Direc
     );
 
     const trackPad = (event: PointerEvent<HTMLDivElement>) => {
-        const rect = event.currentTarget.getBoundingClientRect();
+        const rect = (crossRef.current ?? event.currentTarget).getBoundingClientRect();
         const dx = event.clientX - (rect.left + rect.width / 2);
         const dy = event.clientY - (rect.top + rect.height / 2);
         const next = new Set<Direction>();
@@ -149,17 +147,22 @@ function Pad({ axes, onDirection }: { axes: Axes; onDirection: (direction: Direc
     const padUp = () => setDirections(new Set());
 
     const labels: Record<Axes, string> = { both: "Direction pad", horizontal: "Steering", vertical: "Throttle" };
+    const zones: Record<Axes, string | undefined> = {
+        both: styles.dpad,
+        horizontal: `${styles.zone} ${styles.steerZone}`,
+        vertical: `${styles.zone} ${styles.throttleZone}`,
+    };
 
     return (
         <div
-            className={axes == "both" ? styles.dpad : styles.zone}
+            className={zones[axes]}
             onPointerDown={padDown}
             onPointerMove={padMove}
             onPointerUp={padUp}
             onPointerCancel={padUp}
             aria-label={labels[axes]}
         >
-            <div className={styles.cross}>
+            <div ref={crossRef} className={`${styles.cross} ${axes == "both" ? "" : styles[axes]}`}>
                 {directions.map((d) => (
                     <span key={d} className={`${styles.arm} ${styles[d]} ${held.has(d) ? styles.pressed : ""}`} />
                 ))}
@@ -172,14 +175,11 @@ function Pad({ axes, onDirection }: { axes: Axes; onDirection: (direction: Direc
 function HoldButton({
     label,
     caption,
-    small = false,
     className,
     onChange,
 }: {
     label: string;
     caption: string;
-    /* Start/Select-style pill, for buttons only needed off the pad */
-    small?: boolean;
     className?: string;
     onChange: (down: boolean) => void;
 }) {
@@ -200,13 +200,11 @@ function HoldButton({
         [],
     );
 
-    const face: ReactNode = small ? <span className={styles.pill}>{label}</span> : label;
-
     return (
         <div className={`${styles.buttonWrap} ${className ?? ""}`}>
             <button
                 type="button"
-                className={`${small ? styles.smallButton : styles.button} ${pressed ? styles.pressed : ""}`}
+                className={`${styles.button} ${pressed ? styles.pressed : ""}`}
                 onPointerDown={(event) => {
                     event.currentTarget.setPointerCapture(event.pointerId);
                     navigator.vibrate?.(8);
@@ -216,7 +214,7 @@ function HoldButton({
                 onPointerCancel={() => set(false)}
                 onContextMenu={(event) => event.preventDefault()}
             >
-                {face}
+                {label}
             </button>
             <span className={styles.caption}>{caption}</span>
         </div>

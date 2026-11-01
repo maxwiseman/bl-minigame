@@ -23,10 +23,12 @@
   box-sizing: border-box;
 }
 
-/* Steering | small mute | throttle or chute, each side touchable top to bottom */
+/* Steering | throttle or chute, each side touchable top to bottom */
 .flight {
+  /* Gap between each screen edge and its pad */
+  --edge: 32px;
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: 1fr 1fr;
   align-self: stretch;
   width: 100%;
   max-width: 480px;
@@ -38,9 +40,21 @@
   touch-action: none;
 }
 
-.small {
-  display: flex;
-  align-items: center;
+/* Flight pads sit the same distance in from either edge, whatever their shape */
+.steerZone {
+  justify-items: start;
+  padding-left: var(--edge);
+}
+
+.throttleZone {
+  justify-items: end;
+  padding-right: var(--edge);
+}
+
+/* Chute button centred where the throttle bar was (bar 40px wide, button 62px) */
+.chuteZone {
+  justify-items: end;
+  padding-right: calc(var(--edge) - 11px);
 }
 
 /* D-pad: generous hit area around a chunky cross */
@@ -57,6 +71,25 @@
   width: 120px;
   height: 120px;
   filter: drop-shadow(0 4px 0 #000);
+}
+
+/* Single-axis pads trimmed to just their bar */
+.cross.horizontal {
+  height: 40px;
+}
+.horizontal .left,
+.horizontal .right,
+.horizontal .hub {
+  top: 0;
+}
+
+.cross.vertical {
+  width: 40px;
+}
+.vertical .up,
+.vertical .down,
+.vertical .hub {
+  left: 0;
 }
 
 .arm,
@@ -178,39 +211,6 @@
 .button.pressed {
   transform: translateY(4px);
   box-shadow: 0 1px 0 #a35300, 0 3px 0 #000;
-}
-
-/* Hit area around a small Start/Select-style pill */
-.smallButton {
-  display: grid;
-  place-items: center;
-  width: 54px;
-  height: 40px;
-  padding: 0;
-  border: none;
-  background: none;
-  touch-action: none;
-  cursor: pointer;
-}
-
-.pill {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 14px;
-  border-radius: 7px;
-  background: #3a3f4c;
-  color: #8b90a0;
-  font: 700 9px system-ui, sans-serif;
-  box-shadow: 0 3px 0 #000;
-  transition:
-    transform 60ms,
-    box-shadow 60ms;
-}
-
-.smallButton.pressed .pill {
-  transform: translateY(2px);
-  box-shadow: 0 1px 0 #000;
 }
 
 .caption {
