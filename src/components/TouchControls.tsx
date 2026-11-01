@@ -9,6 +9,8 @@ export type Direction = "up" | "down" | "left" | "right";
 const DIRECTIONS: Direction[] = ["up", "down", "left", "right"];
 /* Pixels from the pad's centre before a press counts */
 const DEAD_ZONE = 10;
+/* Up/down drive the throttle, so they need a press at least halfway along the arm (arms span 20-60px out) */
+const THROTTLE_DEAD_ZONE = 40;
 /* How far off-axis a press can be and still count, so corners give diagonals */
 const DIAGONAL = 0.4;
 
@@ -40,8 +42,8 @@ export default function TouchControls({ onDirection, onAction, onMute }: TouchCo
         const dy = event.clientY - (rect.top + rect.height / 2);
         const next = new Set<Direction>();
         if (Math.hypot(dx, dy) > DEAD_ZONE) {
-            if (-dy > Math.abs(dx) * DIAGONAL) next.add("up");
-            if (dy > Math.abs(dx) * DIAGONAL) next.add("down");
+            if (-dy > THROTTLE_DEAD_ZONE && -dy > Math.abs(dx) * DIAGONAL) next.add("up");
+            if (dy > THROTTLE_DEAD_ZONE && dy > Math.abs(dx) * DIAGONAL) next.add("down");
             if (-dx > Math.abs(dy) * DIAGONAL) next.add("left");
             if (dx > Math.abs(dy) * DIAGONAL) next.add("right");
         }
