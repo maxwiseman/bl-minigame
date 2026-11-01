@@ -14,8 +14,9 @@ export const metadata: Metadata = {
   description,
   openGraph: { title, description, type: "website" },
   twitter: { card: "summary_large_image", title, description },
-  // Home screen launches on iOS go fullscreen, with the game drawn under the status bar
-  appleWebApp: { capable: true, title: "Big Liquid", statusBarStyle: "black-translucent" },
+  // Home screen launches on iOS go fullscreen. An opaque bar keeps the page out from under it, since
+  // iOS 26 blurs whatever is drawn under a translucent one (and a little below it).
+  appleWebApp: { capable: true, title: "Big Liquid", statusBarStyle: "black" },
 };
 
 // No pinch/double-tap zoom getting in the way of the touch controls
