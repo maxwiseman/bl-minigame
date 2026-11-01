@@ -9,7 +9,8 @@ import {
     Entity, FILL_TARGET, GameState, PACKET_POINTS, RECOVERY_BONUS, RUD_PENALTY, inFillBand, isDormant, PX_PER_FT, SPAWN_AHEAD_FT, qRatio, Recovery, ROCKET_H, ROCKET_Y, Tank, toScreenY, usableLevel,
     VIEW_H, VIEW_W,
 } from "./engine";
-import { drawText, PALETTE, sprites } from "./sprites";
+import { LEADERBOARD_SIZE, LeaderboardEntry } from "./leaderboard";
+import { drawText, PALETTE, sprites, textWidth } from "./sprites";
 
 type RGB = [number, number, number];
 
@@ -80,8 +81,8 @@ function blink(state: GameState, hz: number = 2): boolean {
  */
 /* Button names used in on-screen hints */
 const KEY_NAMES = {
-    keyboard: { action: "SPACE", mute: "M" },
-    touch: { action: "A", mute: "B" },
+    keyboard: { action: "SPACE", mute: "M", entry: "TYPE NAME - ENTER TO SAVE" },
+    touch: { action: "A", mute: "B", entry: "↑↓ LETTER ←→ MOVE B DEL A OK" },
 };
 export type Controls = keyof typeof KEY_NAMES;
 let keys = KEY_NAMES.keyboard;
@@ -379,6 +380,8 @@ function drawTitle(ctx: CanvasRenderingContext2D, state: GameState) {
 
     if (blink(state, 1.5)) drawText(ctx, `PRESS ${keys.action} TO LOAD`, cx, 92, { color: PALETTE.y!, align: "center" });
     if (state.best > 0) drawText(ctx, `BEST ${fmt(state.best)}`, cx, 102, { color: PALETTE.c!, align: "center" });
+    const leader = state.board?.[0];
+    if (leader) drawText(ctx, `LEADER ${leader.name} ${fmt(leader.score)}`, cx, 110, { color: PALETTE.l!, align: "center" });
 
     const lines = ["↑↓ THROTTLE", "←→ STEER", `${keys.action} CHUTE`, `${keys.mute} MUTE`];
     lines.forEach((l, i) => drawText(ctx, l, 8, 118 + i * 8, { color: PALETTE.w! }));
@@ -507,26 +510,26 @@ const RECOVERY_LABEL: Record<Recovery, string> = {
 };
 
 function drawResult(ctx: CanvasRenderingContext2D, state: GameState) {
-    panel(ctx, 14, 30, 152, 134);
+    panel(ctx, 8, 6, 164, 228);
     const cx = VIEW_W / 2;
-    let y = 38;
+    const left = 16;
+    const right = 164;
+    let y = 13;
 
     if (state.failure) {
-        drawText(ctx, "RUD!", cx, y, { scale: 3, color: PALETTE.r!, align: "center" });
-        y += 22;
-        drawText(ctx, "RAPID UNSCHEDULED", cx, y, { align: "center" });
-        drawText(ctx, "DISASSEMBLY", cx, y + 8, { align: "center" });
-        drawText(ctx, state.failure, cx, y + 20, { color: PALETTE.y!, align: "center" });
-        y += 32;
+        drawText(ctx, "RUD!", cx, y, { scale: 2, color: PALETTE.r!, align: "center" });
+        y += 13;
+        drawText(ctx, state.failure, cx, y, { color: PALETTE.y!, align: "center" });
+        y += 10;
     } else {
         drawText(ctx, "FLIGHT REPORT", cx, y, { scale: 2, color: PALETTE.o!, align: "center" });
-        y += 20;
+        y += 16;
     }
 
     const row = (label: string, value: string, color: string = PALETTE.w!) => {
-        drawText(ctx, label, 24, y, { color: PALETTE.g! });
-        drawText(ctx, value, 156, y, { color, align: "right" });
-        y += 10;
+        drawText(ctx, label, left, y, { color: PALETTE.g! });
+        drawText(ctx, value, right, y, { color, align: "right" });
+        y += 9;
     };
     row("APOGEE", `${fmt(state.apogee)} FT`);
     row("DATA PACKETS", `${state.packets} x${PACKET_POINTS}`, PALETTE.l!);
@@ -538,14 +541,74 @@ function drawResult(ctx: CanvasRenderingContext2D, state: GameState) {
         row("RECOVERY", bonus > 0 ? `${label} +${fmt(bonus)}` : label, bonus > 0 ? PALETTE.l! : PALETTE.r!);
     }
 
-    y += 4;
+    y += 3;
     ctx.fillStyle = PALETTE.d!;
-    ctx.fillRect(24, y - 4, 132, 1);
-    drawText(ctx, "SCORE", 24, y + 2, { color: PALETTE.g! });
-    drawText(ctx, fmt(state.score), 156, y, { scale: 2, color: PALETTE.y!, align: "right" });
-    y += 16;
-    drawText(ctx, `BEST ${fmt(state.best)}`, 156, y, { color: PALETTE.c!, align: "right" });
-    if (state.newBest && blink(state, 3)) drawText(ctx, "NEW BEST!", 24, y, { color: PALETTE.o! });
+    ctx.fillRect(left, y - 3, right - left, 1);
+    drawText(ctx, "SCORE", left, y + 2, { color: PALETTE.g! });
+    drawText(ctx, fmt(state.score), right, y, { scale: 2, color: PALETTE.y!, align: "right" });
+    y += 13;
+    drawText(ctx, `BEST ${fmt(state.best)}`, right, y, { color: PALETTE.c!, align: "right" });
+    if (state.newBest && blink(state, 3)) drawText(ctx, "NEW BEST!", left, y, { color: PALETTE.o! });
+    y += 11;
 
-    if (state.phaseTime > 0.8 && blink(state, 1.5)) drawText(ctx, `${keys.action} TO FLY AGAIN`, cx, 152, { color: PALETTE.y!, align: "center" });
+    // Rule either side of the heading
+    const half = textWidth("LEADERBOARD") / 2 + 4;
+    ctx.fillStyle = PALETTE.d!;
+    ctx.fillRect(left, y + 2, cx - half - left, 1);
+    ctx.fillRect(cx + half, y + 2, right - cx - half, 1);
+    drawText(ctx, "LEADERBOARD", cx, y, { color: PALETTE.o!, align: "center" });
+    y += 9;
+    drawLeaderboard(ctx, state, left, right, y);
+
+    if (state.entry) {
+        if (blink(state, 2)) drawText(ctx, "NEW HIGH SCORE!", cx, 204, { color: PALETTE.o!, align: "center" });
+        drawText(ctx, keys.entry, cx, 213, { color: PALETTE.g!, align: "center" });
+    } else if (state.phaseTime > 0.8 && blink(state, 1.5)) {
+        drawText(ctx, `${keys.action} TO FLY AGAIN`, cx, 222, { color: PALETTE.y!, align: "center" });
+    }
+}
+
+/* Top scores, with the player's row (or the name they're typing) highlighted */
+function drawLeaderboard(ctx: CanvasRenderingContext2D, state: GameState, left: number, right: number, y: number) {
+    const cx = VIEW_W / 2;
+    if (!state.board) {
+        const text = state.boardOffline ? "LEADERBOARD OFFLINE" : "LOADING...";
+        drawText(ctx, text, cx, y + 4, { color: PALETTE.g!, align: "center" });
+        return;
+    }
+
+    type Row = LeaderboardEntry & { mine: boolean };
+    let rows: Row[] = state.board.map((e) => ({ ...e, mine: false }));
+    const entry = state.entry;
+    if (entry) {
+        rows.push({ name: entry.chars.join(""), score: state.score, mine: true });
+        // Ties go to the existing score, matching the server's order
+        rows = rows.sort((a, b) => b.score - a.score || Number(a.mine) - Number(b.mine)).slice(0, LEADERBOARD_SIZE);
+    } else if (state.submitted) {
+        const own = rows.findIndex((r) => r.name == state.submitted!.name && r.score == state.submitted!.score);
+        if (own >= 0) rows[own]!.mine = true;
+    }
+    if (rows.length == 0) {
+        drawText(ctx, "NO SCORES YET", cx, y + 4, { color: PALETTE.g!, align: "center" });
+        return;
+    }
+
+    const nameX = left + 14;
+    rows.forEach((r, i) => {
+        const ry = y + i * 8;
+        const color = r.mine ? PALETTE.y! : PALETTE.w!;
+        if (r.mine) {
+            ctx.fillStyle = "rgba(255,210,63,0.12)";
+            ctx.fillRect(left - 2, ry - 2, right - left + 4, 9);
+        }
+        drawText(ctx, String(i + 1), left + 8, ry, { color: PALETTE.g!, align: "right" });
+        drawText(ctx, r.name, nameX, ry, { color });
+        drawText(ctx, fmt(r.score), right, ry, { color, align: "right" });
+        if (r.mine && entry && blink(state, 3)) {
+            const before = entry.chars.slice(0, entry.cursor).join("");
+            const cursorX = nameX + (before ? textWidth(before) + 1 : 0);
+            ctx.fillStyle = PALETTE.y!;
+            ctx.fillRect(cursorX, ry + 6, 3, 1);
+        }
+    });
 }

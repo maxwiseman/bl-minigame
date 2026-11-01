@@ -5,6 +5,7 @@
  *  Unauthorized disclosure, export, or use prohibited.
  *  Copyright (c) 2026 Student Space Technology Association.
  */
+import { cleanName, LEADERBOARD_SIZE, LeaderboardEntry, NAME_CHARS, NAME_MAX, qualifies } from "./leaderboard";
 
 /* Internal (pre-scaling) resolution of the game */
 export const VIEW_W = 180;
@@ -115,6 +116,16 @@ export interface Tank {
     filling: boolean;
 }
 
+/* Arcade-style name entry for a leaderboard score */
+export interface NameEntry {
+    chars: string[];
+    /* Character being edited; chars.length means the empty slot after the name */
+    cursor: number;
+    /* D-pad direction currently held, for key repeat */
+    held: "up" | "down" | "left" | "right" | null;
+    repeat: number;
+}
+
 export interface GameState {
     phase: Phase;
     /* Time spent in the current phase */
@@ -146,6 +157,18 @@ export interface GameState {
     score: number;
     best: number;
     newBest: boolean;
+    /* Top scores; null while loading or unreachable */
+    board: LeaderboardEntry[] | null;
+    boardOffline: boolean;
+    /* This flight's score has been checked against the board */
+    boardChecked: boolean;
+    entry: NameEntry | null;
+    /* This flight's submitted row, for highlighting */
+    submitted: LeaderboardEntry | null;
+    /* Waiting to be sent to the server by the host */
+    outbox: LeaderboardEntry | null;
+    /* Name used last time, offered again */
+    lastName: string;
     sounds: GameSound[];
     rng: () => number;
 }
@@ -208,6 +231,13 @@ export function createGame(best: number = 0, rng: () => number = Math.random): G
         score: 0,
         best,
         newBest: false,
+        board: null,
+        boardOffline: false,
+        boardChecked: false,
+        entry: null,
+        submitted: null,
+        outbox: null,
+        lastName: "",
         sounds: [],
         rng,
     };
@@ -299,8 +329,17 @@ export function update(state: GameState, input: GameInput, dt: number): void {
             if (state.phaseTime > 2.2) finish(state);
             break;
         case "result":
+            checkBoard(state);
+            if (state.entry) {
+                updateNameEntry(state, input, dt);
+                break;
+            }
             if (state.phaseTime > 0.8 && input.actionPressed) {
                 const next = createGame(state.best, state.rng);
+                // The leaderboard and player outlive a flight
+                next.board = state.board;
+                next.boardOffline = state.boardOffline;
+                next.lastName = state.lastName;
                 Object.assign(state, next);
                 state.sounds.push("blip");
                 setPhase(state, "fill");
@@ -523,6 +562,98 @@ function finish(state: GameState) {
     state.newBest = state.score > state.best;
     state.best = Math.max(state.best, state.score);
     setPhase(state, "result");
+}
+
+/**
+ * Give the game the latest top scores (null if the leaderboard couldn't be reached)
+ */
+export function setLeaderboard(state: GameState, entries: LeaderboardEntry[] | null): void {
+    state.boardOffline = entries == null;
+    if (entries) state.board = entries.slice(0, LEADERBOARD_SIZE);
+    checkBoard(state);
+}
+
+/* Once per flight, offer name entry if the score makes the board */
+function checkBoard(state: GameState) {
+    if (state.phase != "result" || state.boardChecked || !state.board) return;
+    state.boardChecked = true;
+    if (!qualifies(state.board, state.score)) return;
+    const chars = [...state.lastName];
+    state.entry = { chars, cursor: chars.length, held: null, repeat: 0 };
+}
+
+/**
+ * Typed character during name entry (keyboard)
+ */
+export function typeName(state: GameState, ch: string): void {
+    const entry = state.entry;
+    const c = ch.toUpperCase();
+    if (!entry || c.length != 1 || !NAME_CHARS.includes(c)) return;
+    if (entry.cursor < entry.chars.length) entry.chars[entry.cursor] = c;
+    else if (entry.chars.length < NAME_MAX) entry.chars.push(c);
+    else return;
+    entry.cursor += 1;
+}
+
+/**
+ * Delete during name entry: the character being edited, or the last one
+ */
+export function eraseName(state: GameState): void {
+    const entry = state.entry;
+    if (!entry) return;
+    if (entry.cursor < entry.chars.length) entry.chars.splice(entry.cursor, 1);
+    else entry.chars.pop();
+    entry.cursor = Math.min(entry.cursor, entry.chars.length);
+}
+
+function updateNameEntry(state: GameState, input: GameInput, dt: number) {
+    const entry = state.entry!;
+    const dir = input.up ? "up" : input.down ? "down" : input.left ? "left" : input.right ? "right" : null;
+    if (dir != entry.held) {
+        entry.held = dir;
+        entry.repeat = 0.35;
+        if (dir) stepNameEntry(state, entry, dir);
+    } else if (dir) {
+        entry.repeat -= dt;
+        if (entry.repeat <= 0) {
+            entry.repeat = dir == "up" || dir == "down" ? 0.08 : 0.15;
+            stepNameEntry(state, entry, dir);
+        }
+    }
+
+    if (input.actionPressed && state.phaseTime > 0.8) {
+        const name = cleanName(entry.chars.join(""));
+        if (!name) {
+            state.sounds.push("warn");
+            return;
+        }
+        const row = { name, score: state.score };
+        state.outbox = row;
+        state.submitted = row;
+        state.lastName = name;
+        state.entry = null;
+        // Show it straight away; the server's answer replaces this
+        state.board = [...(state.board ?? []), row].sort((a, b) => b.score - a.score).slice(0, LEADERBOARD_SIZE);
+        state.sounds.push("pickup");
+    }
+}
+
+function stepNameEntry(state: GameState, entry: NameEntry, dir: "up" | "down" | "left" | "right") {
+    if (dir == "up" || dir == "down") {
+        if (entry.cursor == entry.chars.length) {
+            if (entry.chars.length >= NAME_MAX) return;
+            entry.chars.push("A");
+        } else {
+            const i = NAME_CHARS.indexOf(entry.chars[entry.cursor]!);
+            const step = dir == "up" ? 1 : -1;
+            entry.chars[entry.cursor] = NAME_CHARS[(i + step + NAME_CHARS.length) % NAME_CHARS.length]!;
+        }
+    } else if (dir == "right") {
+        if (entry.cursor < entry.chars.length) entry.cursor += 1;
+    } else {
+        entry.cursor = Math.max(0, entry.cursor - 1);
+    }
+    state.sounds.push("blip");
 }
 
 function emitExhaust(state: GameState, dt: number) {

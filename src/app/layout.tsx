@@ -6,6 +6,7 @@ const description =
   "Load the NOS and GOX, throttle through max Q, dodge birds, jets and space junk, and fly SSTA's Big Liquid rocket to 70,000 ft.";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://blgame.maxw.app"),
   title,
   description,
   openGraph: { title, description, type: "website" },
