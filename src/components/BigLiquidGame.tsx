@@ -30,8 +30,11 @@ const STEP_S = 1 / 120;
 const GAP = 6;
 /* Width of the orange outline drawn around the screen, which needs room at the page edges */
 const BORDER = 2;
-/* Gap above the screen: the border, plus the 1px status bar colour strip pinned to the top of the page */
-const TOP = BORDER + 1;
+/*
+ * iOS 27 blurs the top edge of home screen web apps. A solid bar this tall pinned to the top (in the page colour)
+ * hides it, and on some builds stops it altogether; it also sets the status bar colour, which iOS samples from it.
+ */
+const BLUR_GUARD = 16;
 
 const KEYMAP: Record<string, keyof Omit<GameInput, "actionPressed">> = {
     ArrowLeft: "left",
@@ -155,6 +158,8 @@ export default function BigLiquidGame() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [scale, setScale] = useState<number>(1);
     const [touch, setTouch] = useState<boolean>(false);
+    // Launched from the home screen, where iOS blurs the top edge
+    const [installed, setInstalled] = useState<boolean>(false);
     const [layout, setLayout] = useState<ControlLayout>("menu");
     // Read by the render loop, which is set up once
     const touchRef = useRef<boolean>(false);
@@ -220,15 +225,18 @@ export default function BigLiquidGame() {
 
     useEffect(() => {
         const coarse = window.matchMedia("(pointer: coarse)");
+        const home = window.matchMedia("(display-mode: standalone), (display-mode: fullscreen)");
         const resize = () => {
             setTouch(coarse.matches);
+            setInstalled(home.matches);
             touchRef.current = coarse.matches;
             if (coarse.matches) {
                 // Phones fill the width (taller as it goes) as long as the controls keep their minimum height
                 const inset = safeArea();
                 const width = (window.innerWidth - BORDER * 2) / VIEW_W;
                 const height =
-                    (window.innerHeight - Math.max(TOP, inset.top) - GAP - CONTROLS_MIN_H - inset.bottom) / VIEW_H;
+                    (window.innerHeight - inset.top - (home.matches ? BLUR_GUARD : 0) - BORDER - GAP - CONTROLS_MIN_H - inset.bottom) /
+                    VIEW_H;
                 setScale(Math.max(0.1, Math.min(width, height)));
             } else {
                 setScale(fitScale(window.innerWidth, window.innerHeight - GAP - 18));
@@ -400,8 +408,16 @@ export default function BigLiquidGame() {
         // press/toggleMute only touch refs, so the loop is set up once
     }, []);
 
+    const guard = touch && installed ? BLUR_GUARD : 0;
+
     return (
-        <div className={`${styles.game} ${touch ? styles.touch : ""}`} style={{ gap: GAP, paddingTop: touch ? `max(${TOP}px, env(safe-area-inset-top))` : 0 }}>
+        <div
+            className={`${styles.game} ${touch ? styles.touch : ""}`}
+            style={{ gap: GAP, paddingTop: touch ? `calc(env(safe-area-inset-top) + ${guard + BORDER}px)` : 0 }}
+        >
+            {guard > 0 && (
+                <div className={styles.blurGuard} style={{ height: `calc(env(safe-area-inset-top) + ${guard}px)` }} aria-hidden />
+            )}
             <canvas
                 ref={canvasRef}
                 width={VIEW_W}
