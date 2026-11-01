@@ -3,12 +3,17 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
   height: 100dvh;
+  box-sizing: border-box;
   /* Long-press drags on iOS otherwise start selecting text */
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+}
+
+/* Phones: screen pinned to the top, controls taking the rest */
+.game.touch {
+  justify-content: flex-start;
 }
 
 .game canvas {

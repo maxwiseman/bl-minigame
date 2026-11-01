@@ -16,14 +16,16 @@ import { LeaderboardEntry, NAME_MAX } from "@/game/leaderboard";
 import { render } from "@/game/render";
 import { Sfx } from "@/game/sound";
 
-import TouchControls from "./TouchControls";
+import TouchControls, { ControlLayout, CONTROLS_MIN_H } from "./TouchControls";
 import styles from "./BigLiquidGame.module.css";
 
 const BEST_SCORE_KEY = "ascent.bigLiquid.best";
 const NAME_KEY = "bigLiquid.name";
 const STEP_S = 1 / 120;
-/* Height kept free under the screen for the touch controls */
-const CONTROLS_H = 190;
+/* Space between the screen and what's under it */
+const GAP = 6;
+/* Width of the orange outline drawn around the screen, which needs room at the page edges */
+const BORDER = 2;
 
 const KEYMAP: Record<string, keyof Omit<GameInput, "actionPressed">> = {
     ArrowLeft: "left",
@@ -85,6 +87,27 @@ async function leaderboardRequest(init?: RequestInit): Promise<LeaderboardEntry[
 }
 
 /**
+ * Which touch controls a moment of the game needs
+ */
+function controlLayout(state: GameState, current: ControlLayout): ControlLayout {
+    switch (state.phase) {
+        // Settle into the flight layout before liftoff, so nothing moves under the player's thumbs at ignition
+        case "countdown":
+            return "throttle";
+        // The throttle only matters while the engine burns (it can relight), and the chute only once it's out
+        case "flight":
+            return state.rocket.burning ? "throttle" : "coast";
+        case "descent":
+            return "coast";
+        // Nothing to press while it breaks up, so leave the controls where they are until the result
+        case "rud":
+            return current;
+        default:
+            return "menu";
+    }
+}
+
+/**
  * Largest whole-number scale that fits the window, so every pixel stays square (when there's room)
  */
 function fitScale(width: number, height: number): number {
@@ -99,6 +122,7 @@ export default function BigLiquidGame() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [scale, setScale] = useState<number>(1);
     const [touch, setTouch] = useState<boolean>(false);
+    const [layout, setLayout] = useState<ControlLayout>("menu");
     // Read by the render loop, which is set up once
     const touchRef = useRef<boolean>(false);
     const stateRef = useRef<GameState | null>(null);
@@ -166,7 +190,14 @@ export default function BigLiquidGame() {
         const resize = () => {
             setTouch(coarse.matches);
             touchRef.current = coarse.matches;
-            setScale(fitScale(window.innerWidth, window.innerHeight - (coarse.matches ? CONTROLS_H : 24)));
+            if (coarse.matches) {
+                // Phones fill the width (taller as it goes) as long as the controls keep their minimum height
+                const width = (window.innerWidth - BORDER * 2) / VIEW_W;
+                const height = (window.innerHeight - BORDER - GAP - CONTROLS_MIN_H) / VIEW_H;
+                setScale(Math.max(0.1, Math.min(width, height)));
+            } else {
+                setScale(fitScale(window.innerWidth, window.innerHeight - GAP - 18));
+            }
         };
         resize();
         window.addEventListener("resize", resize);
@@ -239,6 +270,7 @@ export default function BigLiquidGame() {
         let acc = 0;
         let lastBest = state.best;
         let lastPhase = state.phase;
+        let lastLayout: ControlLayout = "menu";
         const loop = (now: number) => {
             // Clamp so a backgrounded tab doesn't fast-forward the flight
             acc += Math.min(0.1, (now - last) / 1000);
@@ -261,6 +293,11 @@ export default function BigLiquidGame() {
             if (state.phase != lastPhase) {
                 lastPhase = state.phase;
                 if (state.phase == "fill") refreshBoard();
+            }
+            const nextLayout = controlLayout(state, lastLayout);
+            if (nextLayout != lastLayout) {
+                lastLayout = nextLayout;
+                setLayout(nextLayout);
             }
             // Put the phone keyboard away once the name is saved
             if (!state.entry && document.activeElement == nameInputRef.current) nameInputRef.current?.blur();
@@ -294,7 +331,7 @@ export default function BigLiquidGame() {
     }, []);
 
     return (
-        <div className={styles.game}>
+        <div className={`${styles.game} ${touch ? styles.touch : ""}`} style={{ gap: GAP, paddingTop: touch ? BORDER : 0 }}>
             <canvas
                 ref={canvasRef}
                 width={VIEW_W}
@@ -316,7 +353,7 @@ export default function BigLiquidGame() {
                 onKeyDown={onNameKey}
             />
             {touch ? (
-                <TouchControls onDirection={press} onAction={(down) => press("action", down)} onMute={pressB} />
+                <TouchControls layout={layout} onDirection={press} onAction={(down) => press("action", down)} onMute={pressB} />
             ) : (
                 <div className={styles.footer}>M TO MUTE</div>
             )}
