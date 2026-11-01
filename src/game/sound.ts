@@ -12,6 +12,16 @@ const MASTER_VOLUME = 0.12;
 /* Safari 17+; not in the DOM types yet */
 type AudioSessionNavigator = Navigator & { audioSession?: { type: string } };
 
+/* Shown on the media card iOS puts on the lock screen and in the Dynamic Island while the game plays sound */
+const MEDIA_INFO: MediaMetadataInit = {
+    title: "Big Liquid: The Game",
+    artist: "SSTA",
+    artwork: [
+        { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
+        { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+};
+
 /**
  * Tiny chiptune-style synth for the minigame; everything is generated, no assets
  */
@@ -47,6 +57,14 @@ export class Sfx {
         this.engineGain.gain.value = 0;
         engine.connect(this.engineFilter).connect(this.engineGain).connect(this.master);
         engine.start();
+
+        if ("mediaSession" in navigator) {
+            navigator.mediaSession.metadata = new MediaMetadata(MEDIA_INFO);
+            // The card's play/pause button mutes, same as B
+            navigator.mediaSession.setActionHandler("pause", () => this.setMuted(true));
+            navigator.mediaSession.setActionHandler("play", () => this.setMuted(false));
+            navigator.mediaSession.playbackState = "playing";
+        }
     }
 
     /**
@@ -57,9 +75,14 @@ export class Sfx {
     }
 
     public toggleMute(): boolean {
-        this.muted = !this.muted;
-        this.master.gain.setTargetAtTime(this.muted ? 0 : MASTER_VOLUME, this.ctx.currentTime, 0.02);
+        this.setMuted(!this.muted);
         return this.muted;
+    }
+
+    private setMuted(muted: boolean) {
+        this.muted = muted;
+        this.master.gain.setTargetAtTime(muted ? 0 : MASTER_VOLUME, this.ctx.currentTime, 0.02);
+        if ("mediaSession" in navigator) navigator.mediaSession.playbackState = muted ? "paused" : "playing";
     }
 
     /**
@@ -119,6 +142,11 @@ export class Sfx {
     }
 
     public close(): void {
+        if ("mediaSession" in navigator) {
+            navigator.mediaSession.metadata = null;
+            navigator.mediaSession.setActionHandler("pause", null);
+            navigator.mediaSession.setActionHandler("play", null);
+        }
         void this.ctx.close();
     }
 
