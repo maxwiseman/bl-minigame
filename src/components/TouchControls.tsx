@@ -1,6 +1,6 @@
 "use client";
 
-import { PointerEvent, useRef, useState } from "react";
+import { PointerEvent, useEffect, useRef, useState } from "react";
 
 import styles from "./TouchControls.module.css";
 
@@ -57,8 +57,19 @@ export default function TouchControls({ onDirection, onAction, onMute }: TouchCo
     };
     const padUp = () => setDirections(new Set());
 
+    // iOS ignores user-select during long-press drags, so cancel the touch itself; pointer events still fire.
+    // Needs a native listener, since React's touch listeners are passive.
+    const controlsRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        const controls = controlsRef.current;
+        if (!controls) return;
+        const block = (event: TouchEvent) => event.preventDefault();
+        controls.addEventListener("touchstart", block, { passive: false });
+        return () => controls.removeEventListener("touchstart", block);
+    }, []);
+
     return (
-        <div className={styles.controls}>
+        <div ref={controlsRef} className={styles.controls}>
             <div
                 className={styles.dpad}
                 onPointerDown={padDown}
