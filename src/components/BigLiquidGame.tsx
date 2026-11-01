@@ -345,6 +345,8 @@ export default function BigLiquidGame() {
         window.addEventListener("pointerup", unlockAudio, true);
         window.addEventListener("touchend", unlockAudio, true);
         window.addEventListener("online", onOnline);
+        const onVisibility = () => sfxRef.current?.setHidden(document.hidden);
+        document.addEventListener("visibilitychange", onVisibility);
 
         let frame = 0;
         let last = performance.now();
@@ -403,6 +405,7 @@ export default function BigLiquidGame() {
             window.removeEventListener("pointerup", unlockAudio, true);
             window.removeEventListener("touchend", unlockAudio, true);
             window.removeEventListener("online", onOnline);
+            document.removeEventListener("visibilitychange", onVisibility);
             sfxRef.current?.close();
             sfxRef.current = null;
         };

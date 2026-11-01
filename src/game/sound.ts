@@ -32,6 +32,7 @@ export class Sfx {
     private readonly engineGain: GainNode;
     private readonly engineFilter: BiquadFilterNode;
     private muted: boolean = false;
+    private hidden: boolean = false;
 
     public constructor() {
         // iOS otherwise treats Web Audio as ambient, which the silent switch mutes
@@ -71,7 +72,16 @@ export class Sfx {
      * Resume the context; must be called from a gesture the browser accepts for audio
      */
     public unlock(): void {
-        if (this.ctx.state != "running") void this.ctx.resume();
+        if (this.ctx.state != "running" && !this.hidden) void this.ctx.resume();
+    }
+
+    /**
+     * Stop all sound while the page is out of view, so iOS drops its lock screen player
+     */
+    public setHidden(hidden: boolean): void {
+        this.hidden = hidden;
+        if (hidden) void this.ctx.suspend();
+        else void this.ctx.resume();
     }
 
     public toggleMute(): boolean {
@@ -95,7 +105,7 @@ export class Sfx {
     }
 
     public play(sound: GameSound): void {
-        if (this.ctx.state == "suspended") void this.ctx.resume();
+        if (this.ctx.state == "suspended" && !this.hidden) void this.ctx.resume();
         switch (sound) {
             case "blip":
                 this.tone("square", 880, 880, 0.06, 0.5);
