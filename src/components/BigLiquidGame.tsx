@@ -30,6 +30,8 @@ const STEP_S = 1 / 120;
 const GAP = 6;
 /* Width of the orange outline drawn around the screen, which needs room at the page edges */
 const BORDER = 2;
+/* Gap above the screen: the border, plus the 1px status bar colour strip pinned to the top of the page */
+const TOP = BORDER + 1;
 
 const KEYMAP: Record<string, keyof Omit<GameInput, "actionPressed">> = {
     ArrowLeft: "left",
@@ -226,7 +228,7 @@ export default function BigLiquidGame() {
                 const inset = safeArea();
                 const width = (window.innerWidth - BORDER * 2) / VIEW_W;
                 const height =
-                    (window.innerHeight - Math.max(BORDER, inset.top) - GAP - CONTROLS_MIN_H - inset.bottom) / VIEW_H;
+                    (window.innerHeight - Math.max(TOP, inset.top) - GAP - CONTROLS_MIN_H - inset.bottom) / VIEW_H;
                 setScale(Math.max(0.1, Math.min(width, height)));
             } else {
                 setScale(fitScale(window.innerWidth, window.innerHeight - GAP - 18));
@@ -399,7 +401,7 @@ export default function BigLiquidGame() {
     }, []);
 
     return (
-        <div className={`${styles.game} ${touch ? styles.touch : ""}`} style={{ gap: GAP, paddingTop: touch ? `max(${BORDER}px, env(safe-area-inset-top))` : 0 }}>
+        <div className={`${styles.game} ${touch ? styles.touch : ""}`} style={{ gap: GAP, paddingTop: touch ? `max(${TOP}px, env(safe-area-inset-top))` : 0 }}>
             <canvas
                 ref={canvasRef}
                 width={VIEW_W}

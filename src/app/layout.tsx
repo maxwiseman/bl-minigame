@@ -14,9 +14,9 @@ export const metadata: Metadata = {
   description,
   openGraph: { title, description, type: "website" },
   twitter: { card: "summary_large_image", title, description },
-  // Home screen launches on iOS go fullscreen. An opaque bar keeps the page out from under it, since
-  // iOS 26 blurs whatever is drawn under a translucent one (and a little below it).
-  appleWebApp: { capable: true, title: "Big Liquid", statusBarStyle: "black" },
+  // Home screen launches on iOS go fullscreen. iOS 27 blurs the top of black-translucent web apps, so use the
+  // default bar, which takes its colour from the status-bar-colour strip below (fixed at install time)
+  appleWebApp: { capable: true, title: "Big Liquid", statusBarStyle: "default" },
 };
 
 // No pinch/double-tap zoom getting in the way of the touch controls
@@ -34,6 +34,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en">
       <body>
+        {/* iOS colours the status bar from a real element at the very top (pseudo-elements don't count) */}
+        <div className="status-bar-colour" aria-hidden />
         {children}
         <Analytics />
         <ServiceWorker />
