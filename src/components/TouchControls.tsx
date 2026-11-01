@@ -56,7 +56,7 @@ export default function TouchControls({ layout, onDirection, onAction, onMute }:
 
     // Keys make each pad/button remount on a layout change, which lets go of anything held
     return (
-        <div ref={controlsRef} className={styles.controls} style={{ minHeight: CONTROLS_MIN_H }}>
+        <div ref={controlsRef} className={styles.controls} style={{ minHeight: `calc(${CONTROLS_MIN_H}px + env(safe-area-inset-bottom))` }}>
             {layout == "menu" ? (
                 <div className={styles.menu}>
                     <Pad key="menu-pad" axes="both" onDirection={onDirection} />
