@@ -222,9 +222,17 @@ export default function BigLiquidGame() {
             input.actionPressed = false;
         };
 
+        // Touch presses only count as a gesture for audio once the finger lifts
+        const unlockAudio = () => {
+            ensureSfx();
+            sfxRef.current?.unlock();
+        };
+
         window.addEventListener("keydown", onKey);
         window.addEventListener("keyup", onKey);
         window.addEventListener("blur", onBlur);
+        window.addEventListener("pointerup", unlockAudio, true);
+        window.addEventListener("touchend", unlockAudio, true);
 
         let frame = 0;
         let last = performance.now();
@@ -277,6 +285,8 @@ export default function BigLiquidGame() {
             window.removeEventListener("keydown", onKey);
             window.removeEventListener("keyup", onKey);
             window.removeEventListener("blur", onBlur);
+            window.removeEventListener("pointerup", unlockAudio, true);
+            window.removeEventListener("touchend", unlockAudio, true);
             sfxRef.current?.close();
             sfxRef.current = null;
         };

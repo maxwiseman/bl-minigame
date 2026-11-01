@@ -9,6 +9,9 @@ import { GameSound } from "./engine";
 
 const MASTER_VOLUME = 0.12;
 
+/* Safari 17+; not in the DOM types yet */
+type AudioSessionNavigator = Navigator & { audioSession?: { type: string } };
+
 /**
  * Tiny chiptune-style synth for the minigame; everything is generated, no assets
  */
@@ -21,6 +24,9 @@ export class Sfx {
     private muted: boolean = false;
 
     public constructor() {
+        // iOS otherwise treats Web Audio as ambient, which the silent switch mutes
+        const session = (navigator as AudioSessionNavigator).audioSession;
+        if (session) session.type = "playback";
         this.ctx = new AudioContext();
         this.master = this.ctx.createGain();
         this.master.gain.value = MASTER_VOLUME;
@@ -41,6 +47,13 @@ export class Sfx {
         this.engineGain.gain.value = 0;
         engine.connect(this.engineFilter).connect(this.engineGain).connect(this.master);
         engine.start();
+    }
+
+    /**
+     * Resume the context; must be called from a gesture the browser accepts for audio
+     */
+    public unlock(): void {
+        if (this.ctx.state != "running") void this.ctx.resume();
     }
 
     public toggleMute(): boolean {
