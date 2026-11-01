@@ -1,5 +1,7 @@
 /* Fills whatever height the screen leaves */
 .controls {
+  /* Gap between each screen edge and the pad on that side, shared by every layout so pads line up */
+  --edge: 48px;
   flex: 1;
   display: flex;
   align-items: center;
@@ -18,15 +20,14 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  max-width: 420px;
-  padding: 0 20px;
+  max-width: 480px;
+  /* The D-pad's hit area reaches 15px past the visible pad */
+  padding: 0 calc(var(--edge) - 15px);
   box-sizing: border-box;
 }
 
 /* Steering | throttle or chute, each side touchable top to bottom */
 .flight {
-  /* Gap between each screen edge and its pad */
-  --edge: 32px;
   display: grid;
   grid-template-columns: 1fr 1fr;
   align-self: stretch;
