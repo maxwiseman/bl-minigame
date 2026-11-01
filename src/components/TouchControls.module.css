@@ -23,7 +23,7 @@
   box-sizing: border-box;
 }
 
-/* Steering | start/select | throttle or chute, each side touchable top to bottom */
+/* Steering | small A | throttle or chute, each side touchable top to bottom */
 .flight {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
