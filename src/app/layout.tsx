@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Analytics } from "@vercel/analytics/next";
+
+import ServiceWorker from "@/components/ServiceWorker";
 import "./globals.css";
 
 const title = "Big Liquid: The Game";
@@ -12,6 +14,9 @@ export const metadata: Metadata = {
   description,
   openGraph: { title, description, type: "website" },
   twitter: { card: "summary_large_image", title, description },
+  // Home screen launches on iOS go fullscreen. The default bar avoids iOS 27's extra blur under a translucent one,
+  // and takes its colour from the game's top bar (fixed at install time)
+  appleWebApp: { capable: true, title: "Big Liquid", statusBarStyle: "default" },
 };
 
 // No pinch/double-tap zoom getting in the way of the touch controls
@@ -20,6 +25,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  // Use the whole screen; the game pads itself clear of the notch and home bar
+  viewportFit: "cover",
   themeColor: "#07080d",
 };
 
@@ -29,6 +36,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body>
         {children}
         <Analytics />
+        <ServiceWorker />
       </body>
     </html>
   );

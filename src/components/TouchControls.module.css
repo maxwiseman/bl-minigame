@@ -2,12 +2,15 @@
 .controls {
   /* Gap between each screen edge and the pad on that side, shared by every layout so pads line up */
   --edge: 48px;
+  /* D-pad: overall size, arm thickness, and how far each arm reaches past the hub */
+  --pad: 120px;
+  --thick: 48px;
+  --reach: calc((var(--pad) - var(--thick)) / 2);
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
-  padding-bottom: env(safe-area-inset-bottom);
   box-sizing: border-box;
   touch-action: none;
   user-select: none;
@@ -42,9 +45,10 @@
 }
 
 /* Flight pads sit the same distance in from either edge, whatever their shape */
+/* The steering bar is wider than a full pad (see .cross.horizontal), so it starts further out to keep the same centre */
 .steerZone {
   justify-items: start;
-  padding-left: var(--edge);
+  padding-left: calc(var(--edge) - (3 * var(--thick) - var(--pad)) / 2);
 }
 
 .throttleZone {
@@ -52,10 +56,10 @@
   padding-right: var(--edge);
 }
 
-/* Chute button centred where the throttle bar was (bar 40px wide, button 62px) */
+/* Chute button (62px) centred where the throttle bar was */
 .chuteZone {
   justify-items: end;
-  padding-right: calc(var(--edge) - 11px);
+  padding-right: calc(var(--edge) - (62px - var(--thick)) / 2);
 }
 
 /* D-pad: generous hit area around a chunky cross */
@@ -69,28 +73,44 @@
 
 .cross {
   position: relative;
-  width: 120px;
-  height: 120px;
+  width: var(--pad);
+  height: var(--pad);
   filter: drop-shadow(0 4px 0 #000);
 }
 
-/* Single-axis pads trimmed to just their bar */
+/* Single-axis pads trimmed to just their bar, with square arms: three arms long, centred where a full pad would be */
 .cross.horizontal {
-  height: 40px;
+  width: calc(3 * var(--thick));
+  height: var(--thick);
 }
 .horizontal .left,
 .horizontal .right,
 .horizontal .hub {
   top: 0;
 }
+.horizontal .left,
+.horizontal .right {
+  width: var(--thick);
+}
+.horizontal .hub {
+  left: var(--thick);
+}
 
 .cross.vertical {
-  width: 40px;
+  width: var(--thick);
+  height: calc(3 * var(--thick));
 }
 .vertical .up,
 .vertical .down,
 .vertical .hub {
   left: 0;
+}
+.vertical .up,
+.vertical .down {
+  height: var(--thick);
+}
+.vertical .hub {
+  top: var(--thick);
 }
 
 .arm,
@@ -100,8 +120,6 @@
 }
 
 .arm {
-  width: 40px;
-  height: 40px;
   transition: background 60ms;
 }
 
@@ -116,8 +134,21 @@
   opacity: 0.55;
 }
 
+.up,
+.down {
+  left: var(--reach);
+  width: var(--thick);
+  height: var(--reach);
+}
+
+.left,
+.right {
+  top: var(--reach);
+  width: var(--reach);
+  height: var(--thick);
+}
+
 .up {
-  left: 40px;
   top: 0;
   border-radius: 6px 6px 0 0;
 }
@@ -127,7 +158,6 @@
 }
 
 .down {
-  left: 40px;
   bottom: 0;
   border-radius: 0 0 6px 6px;
 }
@@ -138,7 +168,6 @@
 
 .left {
   left: 0;
-  top: 40px;
   border-radius: 6px 0 0 6px;
 }
 .left::after {
@@ -148,7 +177,6 @@
 
 .right {
   right: 0;
-  top: 40px;
   border-radius: 0 6px 6px 0;
 }
 .right::after {
@@ -157,16 +185,16 @@
 }
 
 .hub {
-  left: 40px;
-  top: 40px;
-  width: 40px;
-  height: 40px;
+  left: var(--reach);
+  top: var(--reach);
+  width: var(--thick);
+  height: var(--thick);
 }
 
 .hub::after {
   content: "";
   position: absolute;
-  inset: 11px;
+  inset: 13px;
   border-radius: 50%;
   background: #22252e;
 }

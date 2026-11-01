@@ -16,6 +16,16 @@
   justify-content: flex-start;
 }
 
+/* Solid bar over the area iOS blurs in home screen apps; a real fixed element so iOS also colours the status bar from it */
+.blurGuard {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: #07080d;
+  pointer-events: none;
+}
+
 .game canvas {
   image-rendering: pixelated;
   box-shadow: 0 0 0 2px #ff8200;

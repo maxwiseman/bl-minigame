@@ -21,11 +21,21 @@ import styles from "./BigLiquidGame.module.css";
 
 const BEST_SCORE_KEY = "ascent.bigLiquid.best";
 const NAME_KEY = "bigLiquid.name";
+/* Last board seen, so offline flights can still make it */
+const BOARD_KEY = "bigLiquid.board";
+/* Scores waiting for a connection, oldest first */
+const QUEUE_KEY = "bigLiquid.queue";
 const STEP_S = 1 / 120;
 /* Space between the screen and what's under it */
 const GAP = 6;
 /* Width of the orange outline drawn around the screen, which needs room at the page edges */
 const BORDER = 2;
+/*
+ * iOS 27 blurs the top edge of home screen web apps. A solid bar this tall pinned to the top (in the page colour)
+ * hides it, and on some builds stops it altogether; it also sets the status bar colour, which iOS samples from it.
+ * Home screen apps get the same space at the bottom, lifting the controls off the home bar.
+ */
+const BLUR_GUARD = 16;
 
 const KEYMAP: Record<string, keyof Omit<GameInput, "actionPressed">> = {
     ArrowLeft: "left",
@@ -72,18 +82,45 @@ function saveName(name: string) {
     }
 }
 
-/**
- * Talk to the leaderboard API; resolves to null when it can't be reached
- */
-async function leaderboardRequest(init?: RequestInit): Promise<LeaderboardEntry[] | null> {
+function loadJson<T>(key: string): T | null {
     try {
-        const response = await fetch("/api/leaderboard", init);
-        if (!response.ok) return null;
-        const { entries } = (await response.json()) as { entries: LeaderboardEntry[] };
-        return entries;
+        return JSON.parse(localStorage.getItem(key) ?? "null") as T | null;
     } catch {
         return null;
     }
+}
+
+function saveJson(key: string, value: unknown) {
+    try {
+        localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+        // Offline extras only; the game runs without them
+    }
+}
+
+/**
+ * Talk to the leaderboard API. Resolves to null if the server turns the request down,
+ * and rejects if it can't be reached at all, so offline requests can be retried.
+ */
+async function leaderboardRequest(init?: RequestInit): Promise<LeaderboardEntry[] | null> {
+    const response = await fetch("/api/leaderboard", init);
+    if (!response.ok) return null;
+    const { entries } = (await response.json()) as { entries: LeaderboardEntry[] };
+    return entries;
+}
+
+/**
+ * Space taken by the notch/status bar and home bar, which a home screen launch draws under
+ */
+function safeArea(): { top: number; bottom: number } {
+    const probe = document.createElement("div");
+    probe.style.cssText =
+        "position:fixed;visibility:hidden;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)";
+    document.body.appendChild(probe);
+    const style = getComputedStyle(probe);
+    const inset = { top: parseFloat(style.paddingTop) || 0, bottom: parseFloat(style.paddingBottom) || 0 };
+    probe.remove();
+    return inset;
 }
 
 /**
@@ -122,6 +159,8 @@ export default function BigLiquidGame() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [scale, setScale] = useState<number>(1);
     const [touch, setTouch] = useState<boolean>(false);
+    // Launched from the home screen, where iOS blurs the top edge
+    const [installed, setInstalled] = useState<boolean>(false);
     const [layout, setLayout] = useState<ControlLayout>("menu");
     // Read by the render loop, which is set up once
     const touchRef = useRef<boolean>(false);
@@ -187,13 +226,18 @@ export default function BigLiquidGame() {
 
     useEffect(() => {
         const coarse = window.matchMedia("(pointer: coarse)");
+        const home = window.matchMedia("(display-mode: standalone), (display-mode: fullscreen)");
         const resize = () => {
             setTouch(coarse.matches);
+            setInstalled(home.matches);
             touchRef.current = coarse.matches;
             if (coarse.matches) {
                 // Phones fill the width (taller as it goes) as long as the controls keep their minimum height
+                const inset = safeArea();
                 const width = (window.innerWidth - BORDER * 2) / VIEW_W;
-                const height = (window.innerHeight - BORDER - GAP - CONTROLS_MIN_H) / VIEW_H;
+                const height =
+                    (window.innerHeight - inset.top - (home.matches ? BLUR_GUARD * 2 : 0) - BORDER - GAP - CONTROLS_MIN_H - inset.bottom) /
+                    VIEW_H;
                 setScale(Math.max(0.1, Math.min(width, height)));
             } else {
                 setScale(fitScale(window.innerWidth, window.innerHeight - GAP - 18));
@@ -218,10 +262,46 @@ export default function BigLiquidGame() {
         const input = inputRef.current;
 
         let alive = true;
-        const refreshBoard = () => {
-            void leaderboardRequest().then((entries) => alive && setLeaderboard(state, entries));
+        const showBoard = (entries: LeaderboardEntry[] | null) => {
+            if (!alive) return;
+            setLeaderboard(state, entries);
+            if (entries) saveJson(BOARD_KEY, entries);
         };
-        refreshBoard();
+        // Offline, the last board seen stays up so a flight can still make it
+        const refreshBoard = () => {
+            void leaderboardRequest().then(showBoard, () => showBoard(null));
+        };
+
+        // Send queued scores, oldest first, stopping at the first one that can't get through.
+        // Rows only leave the queue once sent, and new ones only join the end, so this never loses one.
+        let syncing = false;
+        const sendQueue = async () => {
+            if (syncing) return;
+            syncing = true;
+            try {
+                for (;;) {
+                    const row = loadJson<LeaderboardEntry[]>(QUEUE_KEY)?.[0];
+                    if (!row) break;
+                    const entries = await leaderboardRequest({
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(row),
+                    });
+                    // Sent, or turned down by the server (not worth retrying)
+                    saveJson(QUEUE_KEY, (loadJson<LeaderboardEntry[]>(QUEUE_KEY) ?? []).slice(1));
+                    showBoard(entries);
+                }
+            } catch {
+                // Still offline; the next "online" event tries again
+            } finally {
+                syncing = false;
+            }
+        };
+        const onOnline = () => void sendQueue().then(refreshBoard);
+
+        const cachedBoard = loadJson<LeaderboardEntry[]>(BOARD_KEY);
+        if (cachedBoard) setLeaderboard(state, cachedBoard);
+        onOnline();
 
         const onKey = (event: KeyboardEvent) => {
             // Leave browser/OS shortcuts and the phone name field alone
@@ -264,6 +344,7 @@ export default function BigLiquidGame() {
         window.addEventListener("blur", onBlur);
         window.addEventListener("pointerup", unlockAudio, true);
         window.addEventListener("touchend", unlockAudio, true);
+        window.addEventListener("online", onOnline);
 
         let frame = 0;
         let last = performance.now();
@@ -305,11 +386,8 @@ export default function BigLiquidGame() {
             if (outgoing) {
                 state.outbox = null;
                 saveName(outgoing.name);
-                void leaderboardRequest({
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(outgoing),
-                }).then((entries) => alive && setLeaderboard(state, entries));
+                saveJson(QUEUE_KEY, [...(loadJson<LeaderboardEntry[]>(QUEUE_KEY) ?? []), outgoing]);
+                void sendQueue();
             }
             render(ctx, state, touchRef.current ? "touch" : "keyboard");
             frame = requestAnimationFrame(loop);
@@ -324,14 +402,23 @@ export default function BigLiquidGame() {
             window.removeEventListener("blur", onBlur);
             window.removeEventListener("pointerup", unlockAudio, true);
             window.removeEventListener("touchend", unlockAudio, true);
+            window.removeEventListener("online", onOnline);
             sfxRef.current?.close();
             sfxRef.current = null;
         };
         // press/toggleMute only touch refs, so the loop is set up once
     }, []);
 
+    const guard = touch && installed ? BLUR_GUARD : 0;
+
     return (
-        <div className={`${styles.game} ${touch ? styles.touch : ""}`} style={{ gap: GAP, paddingTop: touch ? BORDER : 0 }}>
+        <div
+            className={`${styles.game} ${touch ? styles.touch : ""}`}
+            style={{ gap: GAP, paddingTop: touch ? `calc(env(safe-area-inset-top) + ${guard + BORDER}px)` : 0 }}
+        >
+            {guard > 0 && (
+                <div className={styles.blurGuard} style={{ height: `calc(env(safe-area-inset-top) + ${guard}px)` }} aria-hidden />
+            )}
             <canvas
                 ref={canvasRef}
                 width={VIEW_W}
@@ -353,7 +440,7 @@ export default function BigLiquidGame() {
                 onKeyDown={onNameKey}
             />
             {touch ? (
-                <TouchControls layout={layout} onDirection={press} onAction={(down) => press("action", down)} onMute={pressB} />
+                <TouchControls layout={layout} bottomSpace={guard} onDirection={press} onAction={(down) => press("action", down)} onMute={pressB} />
             ) : (
                 <div className={styles.footer}>M TO MUTE</div>
             )}
