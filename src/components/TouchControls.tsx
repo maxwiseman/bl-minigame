@@ -7,8 +7,8 @@ import styles from "./TouchControls.module.css";
 export type Direction = "up" | "down" | "left" | "right";
 /**
  * menu: full D-pad with big A/B, for everything off the pad
- * throttle: steering pad, a small Start-style A and the throttle pad, while the engine burns
- * coast: steering pad, the small A and a big A for the chute, once it's out
+ * throttle: steering pad, a small Select-style mute and the throttle pad, while the engine burns
+ * coast: steering pad, the small mute and a big A for the chute, once it's out
  */
 export type ControlLayout = "menu" | "throttle" | "coast";
 type Axes = "both" | "horizontal" | "vertical";
@@ -69,7 +69,7 @@ export default function TouchControls({ layout, onDirection, onAction, onMute }:
                 <div className={styles.flight}>
                     <Pad key="steer" axes="horizontal" onDirection={onDirection} />
                     <div className={styles.small}>
-                        <HoldButton key="small-a" small label="A" caption="ACTION" onChange={onAction} />
+                        <HoldButton key="small-b" small label="B" caption="MUTE" onChange={onB} />
                     </div>
                     {layout == "throttle" ? (
                         <Pad key="throttle" axes="vertical" onDirection={onDirection} />
