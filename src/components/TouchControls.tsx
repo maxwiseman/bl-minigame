@@ -25,13 +25,15 @@ const AXIS_DIRECTIONS: Record<Axes, Direction[]> = {
 const DEAD_ZONE = 10;
 /* How far off-axis a press can be and still count, so corners give diagonals */
 const DIAGONAL = 0.4;
-/* Up/down drive the throttle, so a drag that starts on left/right has to reach halfway along the arm (arms span 20-60px out) */
-const THROTTLE_DEAD_ZONE = 40;
+/* Up/down drive the throttle, so a drag that starts on left/right has to reach halfway along the arm (arms span 24-60px out) */
+const THROTTLE_DEAD_ZONE = 42;
 /* Up/down for any other press */
 const THROTTLE_TAP_ZONE = 10;
 
 interface TouchControlsProps {
     layout: ControlLayout;
+    /* Extra space under the controls, above the home bar */
+    bottomSpace?: number;
     onDirection: (direction: Direction, down: boolean) => void;
     onAction: (down: boolean) => void;
     onMute: () => void;
@@ -40,7 +42,7 @@ interface TouchControlsProps {
 /**
  * Game Boy-style D-pad and A/B buttons for touch screens
  */
-export default function TouchControls({ layout, onDirection, onAction, onMute }: TouchControlsProps) {
+export default function TouchControls({ layout, bottomSpace = 0, onDirection, onAction, onMute }: TouchControlsProps) {
     // iOS ignores user-select during long-press drags, so cancel the touch itself; pointer events still fire.
     // Needs a native listener, since React's touch listeners are passive.
     const controlsRef = useRef<HTMLDivElement>(null);
@@ -56,7 +58,14 @@ export default function TouchControls({ layout, onDirection, onAction, onMute }:
 
     // Keys make each pad/button remount on a layout change, which lets go of anything held
     return (
-        <div ref={controlsRef} className={styles.controls} style={{ minHeight: `calc(${CONTROLS_MIN_H}px + env(safe-area-inset-bottom))` }}>
+        <div
+            ref={controlsRef}
+            className={styles.controls}
+            style={{
+                minHeight: `calc(${CONTROLS_MIN_H + bottomSpace}px + env(safe-area-inset-bottom))`,
+                paddingBottom: `calc(env(safe-area-inset-bottom) + ${bottomSpace}px)`,
+            }}
+        >
             {layout == "menu" ? (
                 <div className={styles.menu}>
                     <Pad key="menu-pad" axes="both" onDirection={onDirection} />

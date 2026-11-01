@@ -33,6 +33,7 @@ const BORDER = 2;
 /*
  * iOS 27 blurs the top edge of home screen web apps. A solid bar this tall pinned to the top (in the page colour)
  * hides it, and on some builds stops it altogether; it also sets the status bar colour, which iOS samples from it.
+ * Home screen apps get the same space at the bottom, lifting the controls off the home bar.
  */
 const BLUR_GUARD = 16;
 
@@ -235,7 +236,7 @@ export default function BigLiquidGame() {
                 const inset = safeArea();
                 const width = (window.innerWidth - BORDER * 2) / VIEW_W;
                 const height =
-                    (window.innerHeight - inset.top - (home.matches ? BLUR_GUARD : 0) - BORDER - GAP - CONTROLS_MIN_H - inset.bottom) /
+                    (window.innerHeight - inset.top - (home.matches ? BLUR_GUARD * 2 : 0) - BORDER - GAP - CONTROLS_MIN_H - inset.bottom) /
                     VIEW_H;
                 setScale(Math.max(0.1, Math.min(width, height)));
             } else {
@@ -439,7 +440,7 @@ export default function BigLiquidGame() {
                 onKeyDown={onNameKey}
             />
             {touch ? (
-                <TouchControls layout={layout} onDirection={press} onAction={(down) => press("action", down)} onMute={pressB} />
+                <TouchControls layout={layout} bottomSpace={guard} onDirection={press} onAction={(down) => press("action", down)} onMute={pressB} />
             ) : (
                 <div className={styles.footer}>M TO MUTE</div>
             )}
