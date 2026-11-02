@@ -15,6 +15,11 @@ A few key team members (for reference):
 Evan: Project lead
 Mika: Chief engineer
 Isaac: Recovery lead
+Jordan: Propulsion lead
+Roman: Ground systems lead
+Allison (Allie): Logistics and operations
+William: Manufacturing lead
+Sophie: Media lead
 Jake: Software lead
 Twig (Tyler): Electronics lead
 
