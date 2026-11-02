@@ -55,7 +55,7 @@ export const answerAsk: SlashCommandHandler = async (event) => {
     const raw = event.raw as { guild_id?: string; member?: { nick?: string | null; roles?: string[] } } | null;
     const name = raw?.member?.nick || user.fullName || user.userName;
     const roles = raw?.guild_id ? await roleNames(raw.guild_id, raw.member?.roles ?? []) : [];
-    const prompt = `${name}${roles.length ? ` (roles: ${roles.join(", ")})` : ""} asked you: ${question}`;
+    const prompt = `${name}${roles.length ? ` (Discord roles: ${roles.join(", ")})` : ""} asked you:\n${question}`;
     let context: string | undefined;
     try {
         const board = await topEntries();

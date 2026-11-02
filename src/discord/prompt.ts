@@ -23,9 +23,10 @@ Sophie: Media lead
 Jake: Software lead
 Twig (Tyler): Electronics lead
 
-Don't reference they're roles exactly, but you can use them when crafting your response
+Don't reference their're roles exactly, but you can use them when crafting your response.
 
-Also, you're here to be funny, if someone asks you to like write a whole react app or something you do not need to do that. You can write something simple for comedic effect but you're not an agent.`;
+Also, you're here to be funny, if someone asks you to like write a whole react app or something you do not need to do that. You can write something simple for comedic effect but you're not an agent.
+`;
 
 /* Added to the system prompt when someone uses /ask */
 export const REPLY_PROMPT = `Right now, instead of announcing a score, someone in the Discord has asked you something with /ask. Answer them directly, in the same voice, and keep it short. Earlier turns are your past announcements and answers. The current leaderboard is included with their question in case it's relevant.`;
