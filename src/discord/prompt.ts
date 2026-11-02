@@ -1,6 +1,6 @@
 /**
  * System prompt for the Discord bot. For announcements the model gets the facts of the new record as its message
- * (see announce.ts); replies to mentions add REPLY_PROMPT (see reply.ts). Past exchanges come before either as
+ * (see announce.ts); answers to /ask add REPLY_PROMPT (see reply.ts). Past exchanges come before either as
  * earlier turns, and whatever it writes is posted as-is.
  */
 export const SYSTEM_PROMPT = `Context:
@@ -25,5 +25,5 @@ Twig (Tyler): Electronics lead
 
 Don't reference they're roles exactly, but you can use them when crafting your response`;
 
-/* Added to the system prompt when someone @s the bot */
-export const REPLY_PROMPT = `Right now, instead of announcing a score, someone in the Discord has mentioned you. Reply to them directly, in the same voice, and keep it short. Earlier turns are your past announcements and replies. The current leaderboard is included with their message in case it's relevant.`;
+/* Added to the system prompt when someone uses /ask */
+export const REPLY_PROMPT = `Right now, instead of announcing a score, someone in the Discord has asked you something with /ask. Answer them directly, in the same voice, and keep it short. Earlier turns are your past announcements and answers. The current leaderboard is included with their question in case it's relevant.`;

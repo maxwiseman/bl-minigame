@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "discord:commands": "node --env-file=.env.local scripts/register-discord-commands.mjs"
   },
   "dependencies": {
     "@chat-adapter/discord": "^4.43.0",

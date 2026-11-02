@@ -1,7 +1,7 @@
 import { createDiscordAdapter, type DiscordAdapter } from "@chat-adapter/discord";
 import { Chat } from "chat";
 
-import { replyToMention } from "./reply";
+import { answerAsk } from "./reply";
 import { getState } from "./state";
 
 type Bot = Chat<{ discord: DiscordAdapter }>;
@@ -26,7 +26,7 @@ export function announcementChannelId(): string | null {
 }
 
 /**
- * The bot, set up to reply to mentions. Credentials come from DISCORD_BOT_TOKEN, DISCORD_APPLICATION_ID and
+ * The bot, set up to answer /ask. Credentials come from DISCORD_BOT_TOKEN, DISCORD_APPLICATION_ID and
  * DISCORD_PUBLIC_KEY.
  */
 export async function getBot(): Promise<Bot> {
@@ -37,7 +37,7 @@ export async function getBot(): Promise<Bot> {
             adapters: { discord: createDiscordAdapter() },
             state: await getState(),
         });
-        chat.onNewMention(replyToMention);
+        chat.onSlashCommand("/ask", answerAsk);
         await chat.initialize();
         return chat;
     })();

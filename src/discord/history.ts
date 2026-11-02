@@ -1,12 +1,12 @@
 import { getState } from "./state";
 
-/* State key for the bot's conversation, shared by announcements and replies to mentions */
+/* State key for the bot's conversation, shared by announcements and /ask answers */
 const HISTORY_KEY = "history";
 /* How many past exchanges the model sees */
 const HISTORY_KEPT = 20;
 
 /**
- * Something the bot responded to (a new record, someone's message) and what it said
+ * Something the bot responded to (a new record, someone's question) and what it said
  */
 export interface Exchange {
     prompt: string;
