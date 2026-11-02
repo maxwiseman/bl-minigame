@@ -4,6 +4,8 @@ const nextConfig: NextConfig = {
   /* config options here */
   cacheComponents: true,
   partialPrefetching: true,
+  // The Discord adapter pulls in discord.js, whose optional native deps (zlib-sync etc.) can't be bundled
+  serverExternalPackages: ["@chat-adapter/discord", "discord.js"],
   async headers() {
     return [
       {
