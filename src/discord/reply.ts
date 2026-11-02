@@ -11,6 +11,29 @@ import { getState } from "./state";
 const COOLDOWN_MS = 2_000;
 
 /**
+ * Names of the given roles, highest first. Discord only sends role IDs, so this looks the server's roles up each
+ * time (only needs the bot to be in the server); resolves to none if that fails.
+ */
+async function roleNames(guildId: string, roleIds: string[]): Promise<string[]> {
+    if (roleIds.length == 0) return [];
+    try {
+        const api = process.env.DISCORD_API_URL ?? "https://discord.com/api/v10";
+        const response = await fetch(`${api}/guilds/${guildId}/roles`, {
+            headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` },
+        });
+        if (!response.ok) throw new Error(`Discord said ${response.status}`);
+        const roles = (await response.json()) as { id: string; name: string; position: number }[];
+        return roles
+            .filter((role) => roleIds.includes(role.id))
+            .sort((a, b) => b.position - a.position)
+            .map((role) => role.name);
+    } catch (error) {
+        console.error("Discord bot: couldn't look up roles", error);
+        return [];
+    }
+}
+
+/**
  * Answer /ask, in the same conversation as the bot's announcements. Discord shows "X used /ask" but not the
  * question, so the answer quotes it.
  */
@@ -28,9 +51,11 @@ export const answerAsk: SlashCommandHandler = async (event) => {
         return;
     }
 
-    // The Chat SDK only gives username and display name; the server nickname is in Discord's own payload
-    const nick = (event.raw as { member?: { nick?: string | null } } | null)?.member?.nick;
-    const prompt = `${nick || user.fullName || user.userName} asked you: ${question}`;
+    // The Chat SDK only gives username and display name; the server nickname and roles are in Discord's own payload
+    const raw = event.raw as { guild_id?: string; member?: { nick?: string | null; roles?: string[] } } | null;
+    const name = raw?.member?.nick || user.fullName || user.userName;
+    const roles = raw?.guild_id ? await roleNames(raw.guild_id, raw.member?.roles ?? []) : [];
+    const prompt = `${name}${roles.length ? ` (roles: ${roles.join(", ")})` : ""} asked you: ${question}`;
     let context: string | undefined;
     try {
         const board = await topEntries();
