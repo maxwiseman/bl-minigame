@@ -8,8 +8,12 @@
     "start": "next start"
   },
   "dependencies": {
+    "@chat-adapter/discord": "^4.43.0",
+    "@chat-adapter/state-memory": "^4.43.0",
     "@upstash/redis": "^1.40.0",
     "@vercel/analytics": "^2.0.1",
+    "ai": "^7.0.159",
+    "chat": "^4.43.0",
     "next": "16.4.3",
     "react": "19.3.0",
     "react-dom": "19.3.0"
