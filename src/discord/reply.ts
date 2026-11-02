@@ -28,7 +28,9 @@ export const answerAsk: SlashCommandHandler = async (event) => {
         return;
     }
 
-    const prompt = `${user.fullName || user.userName} asked you: ${question}`;
+    // The Chat SDK only gives username and display name; the server nickname is in Discord's own payload
+    const nick = (event.raw as { member?: { nick?: string | null } } | null)?.member?.nick;
+    const prompt = `${nick || user.fullName || user.userName} asked you: ${question}`;
     let context: string | undefined;
     try {
         const board = await topEntries();
