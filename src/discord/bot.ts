@@ -1,66 +1,45 @@
-import { createDiscordAdapter } from "@chat-adapter/discord";
-import { createMemoryState } from "@chat-adapter/state-memory";
-import { createRedisState } from "@chat-adapter/state-redis";
-import { Chat, type StateAdapter } from "chat";
+import { createDiscordAdapter, type DiscordAdapter } from "@chat-adapter/discord";
+import { Chat } from "chat";
 
-/* State key for the bot's past announcements, which the model reads back for context */
-const ANNOUNCEMENTS_KEY = "announcements";
-/* How many past announcements the model sees */
-const ANNOUNCEMENTS_KEPT = 10;
+import { replyToMention } from "./reply";
+import { getState } from "./state";
+
+type Bot = Chat<{ discord: DiscordAdapter }>;
+
+let bot: Promise<Bot> | null = null;
 
 /**
- * An announcement the bot posted, with the facts it was written from
+ * Whether the Discord app credentials are set
  */
-export interface Announcement {
-    facts: string;
-    text: string;
+export function discordConfigured(): boolean {
+    const { DISCORD_BOT_TOKEN, DISCORD_APPLICATION_ID, DISCORD_PUBLIC_KEY } = process.env;
+    return Boolean(DISCORD_BOT_TOKEN && DISCORD_APPLICATION_ID && DISCORD_PUBLIC_KEY);
 }
-
-let bot: { chat: Chat; state: StateAdapter } | null = null;
 
 /**
  * Discord channel the bot announces in, or null when Discord isn't configured
  */
 export function announcementChannelId(): string | null {
-    const { DISCORD_BOT_TOKEN, DISCORD_APPLICATION_ID, DISCORD_PUBLIC_KEY, DISCORD_GUILD_ID, DISCORD_CHANNEL_ID } =
-        process.env;
-    if (!DISCORD_BOT_TOKEN || !DISCORD_APPLICATION_ID || !DISCORD_PUBLIC_KEY || !DISCORD_GUILD_ID || !DISCORD_CHANNEL_ID) {
-        return null;
-    }
+    const { DISCORD_GUILD_ID, DISCORD_CHANNEL_ID } = process.env;
+    if (!discordConfigured() || !DISCORD_GUILD_ID || !DISCORD_CHANNEL_ID) return null;
     return `discord:${DISCORD_GUILD_ID}:${DISCORD_CHANNEL_ID}`;
 }
 
-async function getBot() {
-    if (!bot) {
-        // Redis (REDIS_URL, from Upstash) keeps the announcement log between requests; memory is fine locally
-        const state = process.env.REDIS_URL ? createRedisState() : createMemoryState();
-        // Credentials come from DISCORD_BOT_TOKEN, DISCORD_APPLICATION_ID and DISCORD_PUBLIC_KEY
-        const chat = new Chat({
+/**
+ * The bot, set up to reply to mentions. Credentials come from DISCORD_BOT_TOKEN, DISCORD_APPLICATION_ID and
+ * DISCORD_PUBLIC_KEY.
+ */
+export async function getBot(): Promise<Bot> {
+    // One shared setup, so requests arriving together don't each register the handler
+    bot ??= (async () => {
+        const chat: Bot = new Chat({
             userName: "Big Liquid Game",
             adapters: { discord: createDiscordAdapter() },
-            state,
+            state: await getState(),
         });
-        bot = { chat, state };
-    }
-    await bot.chat.initialize();
+        chat.onNewMention(replyToMention);
+        await chat.initialize();
+        return chat;
+    })();
     return bot;
-}
-
-/**
- * Past announcements, oldest first
- */
-export async function recentAnnouncements(): Promise<Announcement[]> {
-    const { state } = await getBot();
-    return state.getList<Announcement>(ANNOUNCEMENTS_KEY);
-}
-
-/**
- * Post a message to the announcement channel and add it to the log
- */
-export async function postAnnouncement(announcement: Announcement): Promise<void> {
-    const channelId = announcementChannelId();
-    if (!channelId) return;
-    const { chat, state } = await getBot();
-    await chat.channel(channelId).post(announcement.text);
-    await state.appendToList(ANNOUNCEMENTS_KEY, announcement, { maxLength: ANNOUNCEMENTS_KEPT });
 }

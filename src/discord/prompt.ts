@@ -1,8 +1,7 @@
 /**
- * System prompt for high score announcements.
- *
- * TODO: placeholder until the real prompt is in. The model gets the facts of the new record as its message
- * (see announce.ts), and whatever it writes is posted to the channel as-is.
+ * System prompt for the Discord bot. For announcements the model gets the facts of the new record as its message
+ * (see announce.ts); replies to mentions add REPLY_PROMPT (see reply.ts). Past exchanges come before either as
+ * earlier turns, and whatever it writes is posted as-is.
  */
 export const SYSTEM_PROMPT = `Context:
 This game is just a silly little arcade-style game where the user flies a Big Liquid rocket into space, avoiding balloons, planes, and space debris. The names are always all-caps because of how they're input, you can correct this if it makes sense.
@@ -20,3 +19,6 @@ Jake: Software lead
 Twig (Tyler): Electronics lead
 
 Don't reference they're roles exactly, but you can use them when crafting your response`;
+
+/* Added to the system prompt when someone @s the bot */
+export const REPLY_PROMPT = `Right now, instead of announcing a score, someone in the Discord has mentioned you. Reply to them directly, in the same voice, and keep it short. Earlier turns are your past announcements and replies. The current leaderboard is included with their message in case it's relevant.`;
