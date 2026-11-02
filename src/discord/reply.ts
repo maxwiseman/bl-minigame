@@ -8,7 +8,7 @@ import { REPLY_PROMPT } from "./prompt";
 import { getState } from "./state";
 
 /* One answer per person per this long, so nobody can run up the model bill */
-const COOLDOWN_MS = 10_000;
+const COOLDOWN_MS = 2_000;
 
 /**
  * Answer /ask, in the same conversation as the bot's announcements. Discord shows "X used /ask" but not the
