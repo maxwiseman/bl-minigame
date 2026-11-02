@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Big Liquid: The Game
 
-## Getting Started
+A pixel-art arcade game about SSTA's Big Liquid rocket: load the NOS and GOX, throttle through max Q, dodge birds, jets and space junk, and deploy the chute near apogee. Live at [blgame.maxw.app](https://blgame.maxw.app).
 
-First, run the development server:
+- Keyboard (arrows/WASD, Space, M) or Game Boy-style touch controls on phones
+- Live leaderboard (Upstash Redis)
+- Installable PWA that plays offline and syncs scores when back online
+- Discord bot that announces top 5 changes and answers `/ask`
+
+## Development
 
 ```bash
+npm install
+vercel env pull .env.local   # optional: leaderboard and bot credentials
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000). Without credentials the game still runs; the leaderboard shows as offline and the bot does nothing. The service worker only registers in production builds (`npm run build && npm start`).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Layout
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Path | What's there |
+| --- | --- |
+| `src/game/` | Engine (pure game state and `update`), renderer, sprites, sound, shared leaderboard rules |
+| `src/components/` | The game component, touch controls, service worker registration |
+| `src/app/api/leaderboard/` | Leaderboard API (GET top 10, POST a score) |
+| `src/leaderboard-db.ts` | Upstash client and leaderboard queries |
+| `src/discord/` | Discord bot: announcements, `/ask`, prompts, memory |
+| `src/app/api/webhooks/discord/` | Discord interactions endpoint |
+| `public/sw.js` | Offline service worker |
+| `scripts/register-discord-commands.mjs` | Registers `/ask` with Discord |
 
-## Learn More
+## Environment variables
 
-To learn more about Next.js, take a look at the following resources:
+| Variable | Used for |
+| --- | --- |
+| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | Leaderboard (Upstash REST) |
+| `REDIS_URL` | Bot memory and cooldowns (Upstash, Chat SDK Redis state) |
+| `DISCORD_BOT_TOKEN`, `DISCORD_APPLICATION_ID`, `DISCORD_PUBLIC_KEY` | Discord app credentials |
+| `DISCORD_GUILD_ID`, `DISCORD_CHANNEL_ID` | Server for `/ask` and channel for announcements |
+| `AI_GATEWAY_API_KEY` | Local only; on Vercel, AI Gateway uses OIDC |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Discord bot
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Built with the [Chat SDK](https://chat-sdk.dev) Discord adapter, with messages written by the [AI SDK](https://ai-sdk.dev) through AI Gateway.
 
-## Deploy on Vercel
+- **Announcements:** any score that lands in the top 5 gets posted to `DISCORD_CHANNEL_ID`.
+- **`/ask`:** answered with the current leaderboard plus the asker's nickname and roles.
+- **Memory:** announcements and answers share one conversation history of the last 20 exchanges, stored in Redis.
+- **Prompts:** in `src/discord/prompt.ts`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Setup:
+1. Invite the bot with the `bot` and `applications.commands` scopes (View Channel, Send Messages).
+2. Set the app's Interactions Endpoint URL to `https://blgame.maxw.app/api/webhooks/discord`.
+3. Register `/ask`: `npm run discord:commands` (reads `.env.local`).
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Everything runs as ordinary requests, so the bot works on Vercel's Hobby plan.
