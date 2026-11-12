@@ -52,6 +52,7 @@ Built with [Eve](https://eve.dev/docs/guides/frontend/nextjs), using the Next.js
 - **Conversations:** `/ask`, bot-user @mentions, and replies to the bot. Replies stay in the channel. Eve manages durable sessions and long-term memory.
 - **Memory:** `agent/memory/team.ts` uses Upstash AgentKit `redisMemory`. Server conversations and announcements share a guild-scoped slot. DMs have separate per-user memory. Both incoming messages and replies are captured, with ranked fact recall and tools to search earlier sessions. This mode does not expose AgentKit's forget tool. Use an Upstash Redis database with Redis Search support; no old history is imported.
 - **Leaderboard:** the agent has one read-only tool for current rankings. General shell, file, and coding tools are disabled.
+- **Nickname:** the `change_nickname` tool can change or clear only the bot's own nickname in the current server, using Discord's `/members/@me` endpoint. Grant **Change Nickname** to the bot role; **Manage Nicknames** is unnecessary. The tool accepts no user or server ID and is unavailable from DMs or automated announcements.
 - **Speaker context:** server nicknames and role names are included, with a two-second per-user cooldown.
 - **No generated pings:** Discord replies and announcements disable allowed mentions.
 
