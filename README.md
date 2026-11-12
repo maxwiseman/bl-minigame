@@ -67,7 +67,7 @@ Built with [Eve](https://eve.dev/docs/guides/frontend/nextjs), using the Next.js
 
 Mentions work without the privileged Message Content intent. For thread follow-ups without another mention, enable **Message Content Intent** under **Bot** in the Discord Developer Portal, then set `DISCORD_MESSAGE_CONTENT=true` and redeploy. Requesting the intent before enabling it causes Discord to refuse the connection.
 
-The relay is always on, but model calls run only when messages or score announcements arrive. There are no cron jobs. Vercel Daemons and Eve's Gateway support are currently beta/experimental. Messages during a relay restart can be lost; Discord doesn't replay them. Run only one relay per bot to avoid duplicate replies.
+The relay is always on; model calls run for messages, score announcements, and the nightly memory review below. Vercel Daemons and Eve's Gateway support are currently beta/experimental. Messages during a relay restart can be lost; Discord doesn't replay them. Run only one relay per bot to avoid duplicate replies.
 
 ### Ambient listening
 
@@ -82,6 +82,20 @@ Only those exact channels are watched; list thread IDs separately if needed. Emp
 Unmentioned messages are screened by the AI SDK's `experimental_decide` using OpenAI's native Decisions model (`openai/gpt-6-luna-decisions`) through the existing AI Gateway authentication. The filter and agent see up to ten preceding messages (up to 2,000 characters each), with the bot's own messages labeled. Mentions also receive this context, including earlier questions they refer back to. Clearly irrelevant messages start no agent turn; uncertainty or screening errors pass the message to the agent, which can call `no_reply`. Accepted ambient messages share one session per channel. Direct requests keep the existing behavior and bypass screening.
 
 The goals in `agent/lib/ambient/goals.ts` cover questions and advice requests addressed to the bot, conversational follow-ups (including short answers to its own questions), game questions, and occasional well-timed Big Liquid jokes. The agent stays quiet during standalone updates, ordinary chatter, acknowledgements, logistics, and questions clearly for other people. Once the filter admits an ambient message, Eve shows its normal typing indicator while the agent works. The agent can still call `no_reply` and post no message. Filter logs contain IDs, probabilities, and skip decisions, not message text. There is one screening call per eligible unmentioned message; only accepted turns reach the main agent and its memory.
+
+### Project memory and nightly dreaming
+
+`agent/memory/project.ts` uses Eve's `fileMemory` with Upstash's `redisDocuments` backend. Its compact, editable project reference (12,000 characters total; 2,048 UTF-8 bytes per entry) is recalled in every server conversation and leaderboard announcement. It is scoped to the Discord guild; DMs cannot read or write it. The existing `team` slot still captures accepted conversations and supports transcript search. The agent can save useful project facts during conversations too.
+
+`agent/schedules/dream.ts` runs quietly at **08:00 UTC daily** (3am Eastern in winter, 4am in summer), using Eve's native Vercel Schedules integration. No public endpoint or `CRON_SECRET` is needed. Deploy with Vercel CLI **65.14.0 or newer** if building locally. The first deployed run starts the review; this change does not backfill the database during development.
+
+The review reads **every channel explicitly listed in `DISCORD_AMBIENT_CHANNEL_IDS`**, independently of the Decisions filter. It starts with the previous seven days on first use, then works through new messages in 50-message pages. List thread IDs explicitly; it does not discover child threads. It needs `DISCORD_GUILD_ID`, Discord credentials, Message Content Intent, View Channel, and Read Message History. Empty channel configuration disables review work.
+
+The agent reconciles useful rocket facts and dated progress, blockers, decisions and next steps with its existing notes, retaining source-message links and uncertainty. Bot replies are context, not evidence about the real rocket. No Discord reply is posted. A checkpoint advances only after a successful memory save or an explicit explanation that the page contains nothing new worth learning. Failed/uncommitted pages are revisited; other channels can continue. Redis keeps environment-scoped cursors and a small latest-review audit per channel. Memory consolidation remains model-driven: check important claims against their sources.
+
+Limits: attachment contents are not downloaded, edits/deletions behind a committed cursor are not re-scanned, and material older than the initial seven-day window is not imported. Removed channels stop future reviews but don't automatically delete previously learned facts. Missing history permission can look like an empty channel in Discord's API; empty pages never advance progress. Very busy channels may take multiple runs to catch up. ClickUp is not connected yet.
+
+For local testing, `POST http://localhost:2000/eve/v1/dev/schedules/dream` triggers one real review using local credentials; `eve dev` does not fire schedules on its own. Use a separate development Redis database if you don't want local memory writes in a shared store. Production executions appear under the Eve schedule's Vercel run history and logs.
 
 ### Local agent development
 
