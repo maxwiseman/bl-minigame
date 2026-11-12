@@ -1,13 +1,9 @@
-import type { LeaderboardEntry } from "@/game/leaderboard";
-
-import { announcementChannelId, getBot } from "./bot";
-import { compose } from "./compose";
-import { remember } from "./history";
+import type { LeaderboardEntry } from "../../src/game/leaderboard";
 
 /* Scores that make this many places get announced */
 const ANNOUNCED_PLACES = 5;
 
-interface NewScore {
+export interface NewScore {
 	name: string;
 	score: number;
 	/* The leaderboard just before this score went in */
@@ -30,18 +26,10 @@ export function shouldAnnounce(before: LeaderboardEntry[], score: number): boole
 	return placeOf(before, score) <= ANNOUNCED_PLACES;
 }
 
-function fallbackMessage({ name, score, before }: NewScore, place: number): string {
-	if (place == 1) {
-		const beat = before[0] ? `, beating ${before[0].name}'s ${points(before[0].score)}` : "";
-		return `🚀 New Big Liquid high score: ${name} with ${points(score)}${beat}!`;
-	}
-	return `🚀 ${name} just took #${place} on the Big Liquid leaderboard with ${points(score)}!`;
-}
-
 /**
  * The facts of a top-place change, for the model
  */
-function describe({ name, score, before }: NewScore, place: number): string {
+export function describe({ name, score, before }: NewScore, place: number): string {
 	const after = [...before.slice(0, place - 1), { name, score }, ...before.slice(place - 1)];
 	const displaced = before[place - 1];
 	const droppedOut = before[ANNOUNCED_PLACES - 1];
@@ -74,22 +62,3 @@ function describe({ name, score, before }: NewScore, place: number): string {
 	return lines.join("\n");
 }
 
-/**
- * Announce a score that made the top places in Discord, written by the model; falls back to a plain message so a
- * change is never missed
- */
-export async function announceTopScore(newScore: NewScore): Promise<void> {
-	const channelId = announcementChannelId();
-	if (!channelId) return;
-
-	const place = placeOf(newScore.before, newScore.score);
-	const prompt = describe(newScore, place);
-	const reply = (await compose({ prompt })) ?? fallbackMessage(newScore, place);
-	try {
-		const bot = await getBot();
-		await bot.channel(channelId).post(reply);
-		await remember({ prompt, reply });
-	} catch (error) {
-		console.error("Leaderboard announcement: couldn't post to Discord", error);
-	}
-}

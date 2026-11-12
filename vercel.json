@@ -1,0 +1,9 @@
+{
+  "daemons": {
+    "discord-gateway": {
+      "root": "daemon",
+      "entrypoint": "Dockerfile",
+      "instances": { "iad1": 1 }
+    }
+  }
+}

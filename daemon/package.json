@@ -1,0 +1,8 @@
+{
+  "name": "bl-minigame-discord-gateway",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "eve": "1.0.0-rc.10"
+  }
+}

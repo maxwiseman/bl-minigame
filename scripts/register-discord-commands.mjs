@@ -10,7 +10,7 @@ if (!DISCORD_BOT_TOKEN || !DISCORD_APPLICATION_ID || !DISCORD_GUILD_ID) {
     process.exit(1);
 }
 
-/* Handled in src/discord/reply.ts */
+/* Handled by agent/channels/discord.ts */
 const commands = [
     {
         name: "ask",

@@ -1,6 +1,6 @@
 import { after, connection, type NextRequest } from "next/server";
 
-import { announceTopScore, shouldAnnounce } from "@/discord/announce";
+import { announceScore } from "@/agent";
 import { cleanName, validScore } from "@/game/leaderboard";
 import { NAMES_KEY, redis, SCORES_KEY, topEntries } from "@/leaderboard-db";
 
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
     const limitKey = `leaderboard:limit:${ip}`;
     const submits = await redis.incr(limitKey);
-    if (submits == 1) await redis.expire(limitKey, 60);
+    if (submits === 1) await redis.expire(limitKey, 60);
     if (submits > SUBMITS_PER_MINUTE) return Response.json({ error: "Too many submissions" }, { status: 429 });
 
     const before = await topEntries();
@@ -39,7 +39,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Top 5 changed: tell Discord once the game has its response
-    if (shouldAnnounce(before, score)) after(() => announceTopScore({ name, score, before }));
+				if (before.filter((entry) => entry.score >= score).length < 5) {
+					after(() =>
+						announceScore({ id, name, score, before }, request.nextUrl.origin),
+					);
+				}
 
     return Response.json({ entries: await topEntries() });
 }

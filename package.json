@@ -6,24 +6,31 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "discord:commands": "node --env-file=.env.local scripts/register-discord-commands.mjs"
+    "discord:commands": "node --env-file=.env.local scripts/register-discord-commands.mjs",
+    "agent:dev": "eve dev",
+    "agent:build": "eve build",
+    "discord:relay": "node --env-file=.env.local daemon/main.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@chat-adapter/discord": "^4.43.0",
-    "@chat-adapter/state-memory": "^4.43.0",
-    "@chat-adapter/state-redis": "^4.43.0",
+    "@upstash/agentkit-eve": "^0.19.0",
     "@upstash/redis": "^1.40.0",
     "@vercel/analytics": "^2.0.1",
+    "@vercel/oidc": "^4.0.8",
     "ai": "^7.0.159",
-    "chat": "^4.43.0",
+    "eve": "1.0.0-rc.10",
     "next": "16.4.3",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "typescript": "^5"
+  },
+  "engines": {
+    "node": "24.x"
   }
 }
