@@ -10,7 +10,8 @@
     "agent:dev": "eve dev",
     "agent:build": "eve build",
     "discord:relay": "node --env-file=.env.local daemon/main.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:agent": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "@upstash/agentkit-eve": "^0.19.0",

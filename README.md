@@ -41,6 +41,7 @@ Open [http://localhost:3000](http://localhost:3000). Without credentials the gam
 | `DISCORD_GUILD_ID`, `DISCORD_CHANNEL_ID` | Server for `/ask` and channel for announcements |
 | `AI_GATEWAY_API_KEY` | Local only; on Vercel, AI Gateway uses OIDC |
 | `EVE_URL` | Optional agent origin override; normally omitted on Vercel |
+| `DISCORD_AMBIENT_CHANNEL_IDS` | Comma-separated channel IDs for ambient listening; empty disables it |
 | `DISCORD_MESSAGE_CONTENT` | Optional `true` to receive follow-ups without a mention; first enable Message Content Intent in Discord |
 
 ## Discord bot
@@ -67,6 +68,20 @@ Mentions work without the privileged Message Content intent. For thread follow-u
 
 The relay is always on, but model calls run only when messages or score announcements arrive. There are no cron jobs. Vercel Daemons and Eve's Gateway support are currently beta/experimental. Messages during a relay restart can be lost; Discord doesn't replay them. Run only one relay per bot to avoid duplicate replies.
 
+### Ambient listening
+
+Enable **Message Content Intent** under **Bot** in the Discord Developer Portal. Then set this in the Vercel project's production environment (shared by the agent and daemon), and redeploy:
+
+```text
+DISCORD_AMBIENT_CHANNEL_IDS=123456789012345678,234567890123456789
+```
+
+Only those exact channels are watched; list thread IDs separately if needed. Empty or missing configuration disables ambient listening. Configuring any channel automatically requests Message Content Intent in the daemon, so enable it in Discord first. The bot also needs View Channel and Read Message History in each watched channel.
+
+Unmentioned messages are screened by the AI SDK's `experimental_decide` using OpenAI's native Decisions model (`openai/gpt-6-luna-decisions`) through the existing AI Gateway authentication. The filter sees up to ten preceding messages, with bounded text. Clearly irrelevant messages start no agent turn; uncertainty or screening errors pass the message to the agent, which can call `no_reply`. Accepted ambient messages share one session per channel. Direct requests keep the existing behavior and bypass screening.
+
+The goals in `agent/lib/ambient/goals.ts` cover game questions and occasional well-timed Big Liquid jokes. The agent stays quiet during ordinary chatter, acknowledgements, logistics, and questions for other people. Ambient turns show no typing indicator, and a `no_reply` turn posts no message. Filter logs contain IDs, probabilities, and skip decisions, not message text. There is one screening call per eligible unmentioned message; only accepted turns reach the main agent and its memory.
+
 ### Local agent development
 
 `npm run dev` starts Next.js and the Eve agent. `npm run agent:dev` runs the agent alone (normally on port 2000). To test Gateway messages locally, stop the production relay first, then in a second terminal:
@@ -85,4 +100,4 @@ VERCEL= npm run build
 VERCEL= npm start
 ```
 
-Verify changes with `npm run typecheck`, `npm run build`, and `npm run agent:build`. These compile the app and agent; an end-to-end Discord check additionally needs real credentials and a deployed or locally connected relay.
+Verify changes with `npm run test:agent`, `npm run typecheck`, `npm run build`, and `npm run agent:build`. These compile the app and agent; an end-to-end Discord check additionally needs real credentials and a deployed or locally connected relay.
