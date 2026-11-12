@@ -9,7 +9,7 @@ const historyMessage = z.object({
 });
 
 /** Bounded channel context, ordered oldest first. Missing history is not grounds to skip. */
-export async function recentChannelContext(message: DiscordGatewayMessage): Promise<string[]> {
+export async function recentChannelContext(message: DiscordGatewayMessage, botUserId = process.env.DISCORD_APPLICATION_ID): Promise<string[]> {
     try {
         const api = process.env.DISCORD_API_URL ?? "https://discord.com/api/v10";
         const response = await fetch(`${api}/channels/${message.channelId}/messages?before=${message.id}&limit=10`, {
@@ -20,8 +20,8 @@ export async function recentChannelContext(message: DiscordGatewayMessage): Prom
         if (!response.ok) return [];
         const history = z.array(historyMessage).safeParse(await response.json());
         if (!history.success) return [];
-        return history.data.reverse().map((entry) =>
-            `${entry.author.username} (${entry.author.id}${entry.author.bot ? ", bot" : ""}): ${entry.content.slice(0, 500)}`,
+        return history.data.slice(0, 10).reverse().map((entry) =>
+            `${entry.author.username} (${entry.author.id}${entry.author.id === botUserId ? ", you/the agent" : entry.author.bot ? ", other bot" : ""}): ${entry.content.slice(0, 2000)}`,
         );
     } catch {
         return [];

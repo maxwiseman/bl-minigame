@@ -34,7 +34,7 @@ let failDecision;
 let allowCooldown;
 let history;
 let posts;
-const context = { discord: { post: async (text) => posts.push(text) } };
+const context = { discord: { applicationId: "500", post: async (text) => posts.push(text) } };
 const message = {
     id: "300", channelId: "100", guildId: "200", content: "Who's winning at Big Liquid?",
     author: { id: "400", username: "PLAYER", isBot: false },
@@ -97,12 +97,12 @@ test("unlisted channels, bots, and empty messages never call the filter", async 
 
 test("context is chronological and truncates earlier message text", async () => {
     history = [
-        { content: "x".repeat(1000), author: { id: "2", username: "B" } },
+        { content: "x".repeat(2500), author: { id: "2", username: "B" } },
         { content: "older", author: { id: "1", username: "A" } },
     ];
     const transcript = await recentChannelContext(message);
     assert.match(transcript[0], /older$/);
-    assert.equal(transcript[1].split(": ")[1].length, 500);
+    assert.equal(transcript[1].split(": ")[1].length, 2000);
 });
 
 test("no_reply ends a turn without a textual answer", () => {
@@ -135,4 +135,27 @@ test("ambient cooldowns do not post a slowdown message", async () => {
     allowCooldown = false;
     assert.equal(await onDiscordMessage(context, message), null);
     assert.deepEqual(posts, []);
+});
+
+
+test("mentions carry the preceding unanswered question even outside watched channels", async () => {
+    history = [{ content: "you got advice on securing our radio comms?", author: { id: "400", username: "PLAYER" } }];
+    const accepted = await onDiscordMessage(context, {
+        ...message, channelId: "999", addressed: true, content: "I'm talking to you",
+    });
+    assert(accepted.context.some((text) => text.includes("securing our radio comms")));
+    assert.equal(requests.some((entry) => entry.url.includes("/decision-model")), false);
+});
+
+test("a follow-up's decision and agent context retain the bot's question at the end of a long reply", async () => {
+    const question = "What radios are you using?";
+    history = [{ content: `${"Background advice. ".repeat(80)} ${question}`, author: { id: "500", username: "BIG LIQUID BOT", bot: true } }];
+    const accepted = await onDiscordMessage(context, { ...message, content: "we're using xbees" });
+    const decision = requests.find((entry) => entry.url.includes("/decision-model"));
+    const evidence = JSON.stringify(JSON.parse(decision.options.body).stateParts);
+    assert(evidence.includes(question));
+    assert(evidence.includes("you/the agent"));
+    assert(evidence.includes("we're using xbees"));
+    assert(accepted.context.some((text) => text.includes(question)));
+    assert(accepted.context.some((text) => text.includes("you/the agent")));
 });
