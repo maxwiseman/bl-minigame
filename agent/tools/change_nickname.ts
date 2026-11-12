@@ -1,5 +1,6 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
+import { invalidateBotIdentity } from "../lib/discord-identity";
 
 export default defineTool({
     description:
@@ -28,6 +29,7 @@ export default defineTool({
         if (response.status === 403) throw new Error("Discord denied the change. The bot needs the Change Nickname permission in this server.");
         if (response.status === 429) throw new Error("Discord rate-limited nickname changes. Wait before trying again.");
         if (!response.ok) throw new Error(`Discord nickname change failed (${response.status}).`);
+        invalidateBotIdentity(guildId);
         return { nickname, changed: true };
     },
 });

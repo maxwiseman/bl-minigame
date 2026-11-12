@@ -33,7 +33,7 @@ export async function onDiscordMessage(ctx: DiscordContext, message: DiscordGate
     if (ambient && (!message.guildId || !ambientChannelIds().has(message.channelId) || !message.content.trim())) return null;
     // Mentions need the conversation too, especially messages like "I'm talking to you".
     const priorMessages = await recentChannelContext(message, ctx.discord.applicationId ?? process.env.DISCORD_APPLICATION_ID);
-    if (ambient && await skipAmbientMessage(message, priorMessages)) return null;
+    if (ambient && await skipAmbientMessage(message, priorMessages, ctx.discord.applicationId ?? process.env.DISCORD_APPLICATION_ID)) return null;
     if (!(await takeCooldown(message.author.id))) {
         if (!ambient) await ctx.discord.post("Slow down! Try again in a few seconds 🚀");
         return null;

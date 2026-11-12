@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import { after, beforeEach, test } from "node:test";
-import nicknameTool from "../agent/tools/change_nickname.ts";
+import { registerHooks } from "node:module";
+
+registerHooks({ resolve(specifier, context, nextResolve) {
+    try { return nextResolve(specifier, context); }
+    catch (error) {
+        if (specifier.startsWith(".") && !/\.[a-z]+$/i.test(specifier)) return nextResolve(`${specifier}.ts`, context);
+        throw error;
+    }
+} });
+const { default: nicknameTool } = await import("../agent/tools/change_nickname.ts");
 
 const originalFetch = globalThis.fetch;
 const originalToken = process.env.DISCORD_BOT_TOKEN;
