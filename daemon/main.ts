@@ -1,10 +1,25 @@
 import { pathToFileURL } from "node:url";
+import { getVercelOidcToken } from "@vercel/oidc";
 import { DiscordGatewayFatalError, runDiscordGatewayRelay } from "eve/experimental/channels/discord/gateway";
+export { DiscordGatewayFatalError };
 
 export async function startRelay(runRelay = runDiscordGatewayRelay, env = process.env): Promise<void> {
     const messageContent = env.DISCORD_MESSAGE_CONTENT === "true"
         || Boolean(env.DISCORD_AMBIENT_CHANNEL_IDS?.split(",").some((id) => id.trim()));
-    const options = { messageContent, url: env.EVE_URL };
+    const options = {
+        messageContent, url: env.EVE_URL,
+        // Eve rc.10 bundles @vercel/oidc 3.8, which ignores Daemons' rotating
+        // token file. Use the file-aware SDK on every request; never cache a token.
+        ...(env.VERCEL === "1" || env.VERCEL_OIDC_TOKEN_FILE || env.VERCEL_OIDC_TOKEN ? {
+            auth: async () => {
+                const token = await getVercelOidcToken();
+                return { headers: {
+                    authorization: `Bearer ${token}`,
+                    "x-vercel-trusted-oidc-idp-token": token,
+                } };
+            },
+        } : {}),
+    };
     try {
         await runRelay(options);
     } catch (error) {

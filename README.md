@@ -69,6 +69,8 @@ Mentions work without the privileged Message Content intent. For thread follow-u
 
 The relay is always on; model calls run for messages, score announcements, and the nightly memory review below. Vercel Daemons and Eve's Gateway support are currently beta/experimental. Messages during a relay restart can be lost; Discord doesn't replay them. Run only one relay per bot to avoid duplicate replies.
 
+The daemon uses `@vercel/oidc` 4.x directly for outbound authentication, reading Vercel's rotating `VERCEL_OIDC_TOKEN_FILE` on every dispatch. Eve rc.10's bundled OIDC helper predates token-file support; using it leaves the bot online but causes forwarded messages to fail with 401. Never copy the rotating token into a cached value or long-lived environment variable.
+
 ### Ambient listening
 
 Enable **Message Content Intent** under **Bot** in the Discord Developer Portal. Then set this in the Vercel project's production environment (shared by the agent and daemon), and redeploy:
