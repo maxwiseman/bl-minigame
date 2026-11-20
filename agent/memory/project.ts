@@ -9,8 +9,9 @@ export default defineMemory({
     provider: fileMemory({ backend: redisDocuments({ redis: getRedis() }), maxCharacters: 12_000 }),
     scope(ctx) {
         const caller = ctx.session.auth.current;
-        const guildId = isScheduleAuth(caller) ? process.env.DISCORD_GUILD_ID : caller?.attributes.guild_id;
-        // Private conversations neither read nor contribute to the server's project knowledge.
+        const guildId = isScheduleAuth(caller) ? process.env.DISCORD_GUILD_ID : caller?.attributes.guild_id
+            ?? (caller?.authenticator === "discord-interaction" && caller.principalType === "user" ? caller.attributes.memory_guild_id : undefined);
+        // DMs receive a trusted memory guild only after a fresh server-membership check.
         return typeof guildId === "string" && /^\d+$/.test(guildId) ? ["guild", guildId] : null;
     },
 });

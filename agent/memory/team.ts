@@ -7,9 +7,9 @@ export default defineMemory({
     provider: redisMemory({ redis: getRedis(), topK: 5, rememberMessages: "all" }),
     scope(ctx) {
         const caller = ctx.session.auth.current;
-        const guildId = caller?.attributes.guild_id;
+        const guildId = caller?.attributes.guild_id ?? (caller?.authenticator === "discord-interaction" && caller.principalType === "user" ? caller.attributes.memory_guild_id : undefined);
         if (typeof guildId === "string" && guildId) return ["guild", guildId];
-        // DMs never share the server's memory or another person's private context.
+        // Verified member DMs use the guild above; other user contexts remain isolated.
         return caller?.principalType === "user" ? ["user", caller.principalId] : null;
     },
 });

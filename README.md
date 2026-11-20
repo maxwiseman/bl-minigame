@@ -50,10 +50,10 @@ Built with [Eve](https://eve.dev/docs/guides/frontend/nextjs), using the Next.js
 
 - **Announcements:** the leaderboard API sends a score event to `POST /eve/v1/leaderboard`. The authenticated Eve channel hands it to the Discord channel with `ctx.to(discord, target).send(...)`; Eve generates and delivers the message in a durable Discord session. The score ID deduplicates repeated events in that session.
 - **Conversations:** `/ask`, bot-user @mentions, and replies to the bot. Replies stay in the channel. Eve manages durable sessions and long-term memory.
-- **Memory:** `agent/memory/team.ts` uses Upstash AgentKit `redisMemory`. Server conversations and announcements share a guild-scoped slot. DMs have separate per-user memory. Both incoming messages and replies are captured, with ranked fact recall and tools to search earlier sessions. This mode does not expose AgentKit's forget tool. Use an Upstash Redis database with Redis Search support; no old history is imported.
+- **Memory:** `agent/memory/team.ts` uses Upstash AgentKit `redisMemory`. Server conversations, announcements, and verified member DMs share the server's memory. Both incoming messages and replies are captured, with ranked fact recall and tools to search earlier sessions. This includes accepted DMs: they contribute to the shared team memory rather than a separate private store. This mode does not expose AgentKit's forget tool. Use an Upstash Redis database with Redis Search support; no old history is imported.
 - **Leaderboard:** the agent has one read-only tool for current rankings. General shell, file, and coding tools are disabled.
 - **Nickname:** the `change_nickname` tool can change or clear only the bot's own nickname in the current server, using Discord's `/members/@me` endpoint. Grant **Change Nickname** to the bot role; **Manage Nicknames** is unnecessary. The tool accepts no user or server ID and is unavailable from DMs or automated announcements.
-- **Speaker context:** server nicknames and role names are included, with a two-second per-user cooldown.
+- **Speaker context:** server nicknames, role names, and stable Discord user IDs are included, with a two-second per-user cooldown. In DMs, the bot fetches the sender's membership in `DISCORD_GUILD_ID` on every message and resolves their nickname/roles from that server. Nonmembers and unverifiable requests do not start an agent turn. No privileged Guild Members intent is needed for this individual lookup.
 - **No generated pings:** Discord replies and announcements disable allowed mentions.
 
 ### Deploy on Vercel
@@ -89,7 +89,7 @@ The goals in `agent/lib/ambient/goals.ts` cover questions and advice requests ad
 
 ### Project memory and nightly dreaming
 
-`agent/memory/project.ts` uses Eve's `fileMemory` with Upstash's `redisDocuments` backend. Its compact, editable project reference (12,000 characters total; 2,048 UTF-8 bytes per entry) is recalled in every server conversation and leaderboard announcement. It is scoped to the Discord guild; DMs cannot read or write it. The existing `team` slot still captures accepted conversations and supports transcript search. The agent can save useful project facts during conversations too.
+`agent/memory/project.ts` uses Eve's `fileMemory` with Upstash's `redisDocuments` backend. Its compact, editable project reference (12,000 characters total; 2,048 UTF-8 bytes per entry) is recalled in server conversations, leaderboard announcements, and DMs from verified members of `DISCORD_GUILD_ID`. DMs receive a trusted `memory_guild_id` only after Discord confirms membership; their actual `guild_id` stays absent so server-only actions remain unavailable. The existing `team` slot captures accepted conversations and supports transcript search. The agent can save useful project facts during conversations too.
 
 `agent/schedules/dream.ts` runs quietly at **08:00 UTC daily** (3am Eastern in winter, 4am in summer), using Eve's native Vercel Schedules integration. No public endpoint or `CRON_SECRET` is needed. Deploy with Vercel CLI **65.14.0 or newer** if building locally. The first deployed run starts the review; this change does not backfill the database during development.
 

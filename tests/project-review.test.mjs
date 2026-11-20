@@ -141,7 +141,7 @@ test("users and announcements cannot invoke background review tools", async () =
     assert.equal(requests.length, 0);
 });
 
-test("dreaming, server conversations and announcements share project memory while DMs are excluded", () => {
+test("dreaming, server conversations and announcements share project memory while unverified DMs are excluded", () => {
     const scope = (auth) => memory.scope({ session: { auth: { current: auth } } });
     assert.deepEqual(scope({ authenticator: "app", principalId: "eve:app", principalType: "runtime" }), ["guild", "200"]);
     assert.deepEqual(scope({ principalType: "user", attributes: { guild_id: "200" } }), ["guild", "200"]);
