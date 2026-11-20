@@ -40,6 +40,8 @@ Open [http://localhost:3000](http://localhost:3000). Without credentials the gam
 | `DISCORD_BOT_TOKEN`, `DISCORD_APPLICATION_ID`, `DISCORD_PUBLIC_KEY` | Discord app credentials |
 | `DISCORD_GUILD_ID`, `DISCORD_CHANNEL_ID` | Server for `/ask` and channel for announcements |
 | `AI_GATEWAY_API_KEY` | Local only; on Vercel, AI Gateway uses OIDC |
+| `CLICKUP_CONNECTOR` | Optional Vercel Connect ClickUp connector UID, e.g. `clickup/big-liquid` |
+| `CLICKUP_LIST_IDS` | Comma-separated approved ClickUp home List IDs (1–20); shared read access for verified server members |
 | `EVE_URL` | Optional agent origin override; normally omitted on Vercel |
 | `DISCORD_AMBIENT_CHANNEL_IDS` | Comma-separated channel IDs for ambient listening; empty disables it |
 | `DISCORD_MESSAGE_CONTENT` | Optional `true` to receive follow-ups without a mention; first enable Message Content Intent in Discord |
@@ -97,7 +99,7 @@ The review reads **every channel explicitly listed in `DISCORD_AMBIENT_CHANNEL_I
 
 The agent reconciles useful rocket facts and dated progress, blockers, decisions and next steps with its existing notes, retaining source-message links and uncertainty. Bot replies are context, not evidence about the real rocket. No Discord reply is posted. A checkpoint advances only after a successful memory save or an explicit explanation that the page contains nothing new worth learning. Failed/uncommitted pages are revisited; other channels can continue. Redis keeps environment-scoped cursors and a small latest-review audit per channel. Memory consolidation remains model-driven: check important claims against their sources.
 
-Limits: attachment contents are not downloaded, edits/deletions behind a committed cursor are not re-scanned, and material older than the initial seven-day window is not imported. Removed channels stop future reviews but don't automatically delete previously learned facts. Missing history permission can look like an empty channel in Discord's API; empty pages never advance progress. Very busy channels may take multiple runs to catch up. ClickUp is not connected yet.
+Limits: attachment contents are not downloaded, edits/deletions behind a committed cursor are not re-scanned, and material older than the initial seven-day window is not imported. Removed channels stop future reviews but don't automatically delete previously learned facts. Missing history permission can look like an empty channel in Discord's API; empty pages never advance progress. Very busy channels may take multiple runs to catch up. ClickUp is not part of the nightly review; the optional connector below is for direct requests only.
 
 For local testing, `POST http://localhost:2000/eve/v1/dev/schedules/dream` triggers one real review using local credentials; `eve dev` does not fire schedules on its own. Use a separate development Redis database if you don't want local memory writes in a shared store. Production executions appear under the Eve schedule's Vercel run history and logs.
 
@@ -122,6 +124,19 @@ The `coding_access` tool manages the Redis policy:
 - Non-managers can list only their accessible repos. Policy mutations recheck manager roles against the latest Redis policy atomically and append an audit entry.
 
 Redis stores the policy at an environment/project/guild-scoped `bl:coding:…:policy` key and a capped 1,000-entry access audit. Eve manages session state and Sandbox files separately. The Sandbox uses 2 vCPUs and a 20-minute runtime timeout; this is not an overall coding-task deadline. `CODING_NETWORK_HOSTS` optionally replaces the package-registry/GitHub host allowlist for repositories needing other dependencies. Sandbox preparation and runtime need Vercel credentials; deployments supply these automatically, while local builds use the linked project's OIDC credentials. CI and human review determine whether a draft is ready to merge.
+
+### Read-only ClickUp connector
+
+The `clickup` tool uses the Vercel Connect TypeScript SDK and ClickUp REST API v2, not MCP. It is disabled until configured; this code does not create an installation or deploy credentials.
+
+1. Create a ClickUp connector in Vercel Connect (for example `vercel connect create clickup --name big-liquid`), authorize an **app-scoped** installation for the intended workspace, and link it to this project and the intended environments. Use a ClickUp account with the minimum required access.
+2. Set `CLICKUP_CONNECTOR` to its actual UID and `CLICKUP_LIST_IDS` to the numeric home List IDs approved for sharing with **every verified member of `DISCORD_GUILD_ID`**. This is shared app access, not each member's personal ClickUp permissions. Do not enable private/restricted lists. Existing Discord bot credentials are required for a fresh membership check on every read.
+3. Redeploy after review. For local development, use `vercel env pull .env.local` for the linked project's OIDC environment. No ClickUp API token belongs in Discord, source files, or a client bundle.
+4. Ask via `/ask`, a direct bot mention, or a verified member DM: “Which ClickUp lists can you read?” then “Show open tasks in list …”. The tool can identify configured lists, fetch one page of tasks, or retrieve a task by its native ID. Follow `nextPage` for complete coverage; closed tasks require `includeClosed: true`.
+
+Only GET requests to `api.clickup.com` are implemented. Task details must have a configured **home** list; tasks present only through a secondary list are excluded. Responses include task links, status, assignees, due dates and retrieval timestamps; descriptions are limited to 8,000 characters and explicitly marked when truncated. Emails, custom fields, sharing tokens, attachments and comments are not returned. Task status is a planning record, not proof of a successful test. Ambient turns, schedules, announcements, other servers and departed members cannot use the connector. Nothing is automatically imported into memory.
+
+A missing configuration, failed Connect authorization, inaccessible item, rate limit or API failure is reported rather than treated as an empty task list. Automated tests mock both Connect token exchange and ClickUp; a real app installation and deployed Discord smoke test are still needed to verify live access.
 
 ### Local agent development
 
