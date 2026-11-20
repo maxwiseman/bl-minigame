@@ -4,6 +4,6 @@
   "type": "module",
   "dependencies": {
     "@vercel/oidc": "^4.0.9",
-    "eve": "1.0.0-rc.10"
+    "eve": "1.2.0"
   }
 }

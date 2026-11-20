@@ -42,6 +42,7 @@ Open [http://localhost:3000](http://localhost:3000). Without credentials the gam
 | `AI_GATEWAY_API_KEY` | Local only; on Vercel, AI Gateway uses OIDC |
 | `EVE_URL` | Optional agent origin override; normally omitted on Vercel |
 | `DISCORD_AMBIENT_CHANNEL_IDS` | Comma-separated channel IDs for ambient listening; empty disables it |
+| `CLICKUP_CONNECTOR` | Optional actual Vercel Connect connector UID for ClickUp MCP; each person authorizes their own account |
 | `DISCORD_MESSAGE_CONTENT` | Optional `true` to receive follow-ups without a mention; first enable Message Content Intent in Discord |
 
 ## Discord bot
@@ -97,7 +98,7 @@ The review reads **every channel explicitly listed in `DISCORD_AMBIENT_CHANNEL_I
 
 The agent reconciles useful rocket facts and dated progress, blockers, decisions and next steps with its existing notes, retaining source-message links and uncertainty. Bot replies are context, not evidence about the real rocket. No Discord reply is posted. A checkpoint advances only after a successful memory save or an explicit explanation that the page contains nothing new worth learning. Failed/uncommitted pages are revisited; other channels can continue. Redis keeps environment-scoped cursors and a small latest-review audit per channel. Memory consolidation remains model-driven: check important claims against their sources.
 
-Limits: attachment contents are not downloaded, edits/deletions behind a committed cursor are not re-scanned, and material older than the initial seven-day window is not imported. Removed channels stop future reviews but don't automatically delete previously learned facts. Missing history permission can look like an empty channel in Discord's API; empty pages never advance progress. Very busy channels may take multiple runs to catch up. ClickUp is not connected yet.
+Limits: attachment contents are not downloaded, edits/deletions behind a committed cursor are not re-scanned, and material older than the initial seven-day window is not imported. Removed channels stop future reviews but don't automatically delete previously learned facts. Missing history permission can look like an empty channel in Discord's API; empty pages never advance progress. Very busy channels may take multiple runs to catch up. ClickUp is optional; see the connection setup below.
 
 For local testing, `POST http://localhost:2000/eve/v1/dev/schedules/dream` triggers one real review using local credentials; `eve dev` does not fire schedules on its own. Use a separate development Redis database if you don't want local memory writes in a shared store. Production executions appear under the Eve schedule's Vercel run history and logs.
 
@@ -122,6 +123,34 @@ The `coding_access` tool manages the Redis policy:
 - Non-managers can list only their accessible repos. Policy mutations recheck manager roles against the latest Redis policy atomically and append an audit entry.
 
 Redis stores the policy at an environment/project/guild-scoped `bl:coding:…:policy` key and a capped 1,000-entry access audit. Eve manages session state and Sandbox files separately. The Sandbox uses 2 vCPUs and a 20-minute runtime timeout; this is not an overall coding-task deadline. `CODING_NETWORK_HOSTS` optionally replaces the package-registry/GitHub host allowlist for repositories needing other dependencies. Sandbox preparation and runtime need Vercel credentials; deployments supply these automatically, while local builds use the linked project's OIDC credentials. CI and human review determine whether a draft is ready to merge.
+
+### Discord company-brain capabilities
+
+Adapted from Eve's [company-brain template](https://github.com/vercel/eve/tree/main/apps/templates/slack-company-brain-template), using Eve **1.2.0** in both the agent and Gateway relay:
+
+| Capability | Behavior |
+| --- | --- |
+| `search_discord` | Discord's native keyword/relevance search across public text/announcement channels in `DISCORD_GUILD_ID`, narrowed to channels readable by both everyone and the requester. Supports author, channel and before/after message filters, pagination and source links. No Redis history index or ingestion cron. |
+| `read_discord_conversation` | Reads recent/older messages or context around a search hit, including public threads. Excludes DMs, private and age-restricted channels even if the bot can see them. |
+| `skills` extension | Eve's native versioned custom skills: personal skills follow a stable Discord user between server chats and verified DMs; shared skills apply to one conversation. Drafts, publishing, rollback and native approval cards. Stored using the existing Redis document backend, isolated by project/environment/guild. Ambient and scheduled turns are read-only. |
+| `schedule__tasks__*` | Deferred native tools for creator-owned one-time or recurring tasks. Bind the destination to the requesting conversation, require approval for changes, revalidate membership and destination access before every run, and deduplicate retried delivery. Default team timezone is America/New_York. |
+| `post_discord_file` | Uploads a generated workspace file to the current conversation, including DMs, after checking current access. Supports binary files, disables mentions and bounds uploads at 10 MiB. Requires **Attach Files**. |
+| ClickUp MCP | Optional per-person OAuth through Vercel Connect. Discover live tasks/Docs/status; read-only annotated tools run directly and other calls require approval. |
+
+The existing shared team/project memory and nightly dreaming are unchanged. No new personal or channel memory slots were added. Skills store reusable instructions separately from factual memory. The template's channel/personal memory split was intentionally omitted.
+
+History search requires **Message Content Intent**, **View Channel** and **Read Message History**. It searches public server history independently of the ambient-listening allowlist, so old messages the bot never answered are still searchable. Discord may need to index the server first; indexing/permission/rate-limit failures are reported as unavailable, not empty results. History is evidence, never instructions. Search results can be read with `around` using their exact message ID; page older history with `nextBefore`.
+
+Ask for tasks naturally: “Every weekday at 9am Eastern, summarize yesterday's radio updates here,” or “Remind me here in 20 minutes.” Approve the displayed schedule and retain its unique management name to update/cancel it later. Runs post in the original channel/thread or DM as a fresh conversation; no one is present to answer questions or approve external writes. They cannot create more schedules, edit skills, change coding permissions, or publish code. Static nightly dreaming remains separate. Production uses Vercel Schedules/Queues; local `eve dev` exposes development controls but doesn't create production schedules. Creating this code does not create any real reminders.
+
+To connect ClickUp:
+
+1. Create an MCP connector in Vercel Connect for the official endpoint `https://mcp.clickup.com/mcp` using OAuth. The CLI accepts `vercel connect create https://mcp.clickup.com/mcp --name big-liquid`; capture the actual returned connector UID.
+2. Attach that connector to this project and the desired environments (`vercel connect attach <returned-uid>`).
+3. Set `CLICKUP_CONNECTOR=<returned-uid>` in those environments and redeploy. The connection stays absent when this variable is missing.
+4. Ask about ClickUp from Discord and follow the native sign-in flow for your own account. Each Discord principal gets its own authorization; a guild conversation and DM currently use separate principal identities, so they may each need sign-in. A scheduled run can use an existing creator grant but cannot complete new interactive consent.
+
+No workspace OAuth grant, connector, live schedule, Discord upload or production configuration is created by installing these changes. Verify provider access and one approved reminder after deployment.
 
 ### Local agent development
 
