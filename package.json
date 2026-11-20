@@ -17,6 +17,7 @@
     "@upstash/agentkit-eve": "^0.19.0",
     "@upstash/redis": "^1.40.0",
     "@vercel/analytics": "^2.0.1",
+    "@vercel/connect": "^2.9.5",
     "@vercel/oidc": "^4.0.8",
     "ai": "^7.0.159",
     "eve": "1.0.0-rc.10",
