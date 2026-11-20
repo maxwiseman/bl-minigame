@@ -101,6 +101,28 @@ Limits: attachment contents are not downloaded, edits/deletions behind a committ
 
 For local testing, `POST http://localhost:2000/eve/v1/dev/schedules/dream` triggers one real review using local credentials; `eve dev` does not fire schedules on its own. Use a separate development Redis database if you don't want local memory writes in a shared store. Production executions appear under the Eve schedule's Vercel run history and logs.
 
+### Coding requests and draft pull requests
+
+The main Eve agent mounts `eve/extensions/code` and `eve/extensions/git` directly, like the company-brain template. It reads and edits files, runs checks in a session Vercel Sandbox, and uses the Git extension to open draft PRs. Eve provides the coding loop and Sandbox lifecycle. There is no separate coding agent or fx job runner. Code tooling is installed into a prepared Sandbox snapshot at agent build time; the code extension opens the session Sandbox on the first turn to read workspace instructions.
+
+GitHub access uses a **GitHub App through Vercel Connect**. Each authenticated command declares a full `owner/repo`; the extension obtains a scoped installation token and delivers it at the Sandbox firewall. Processes receive a placeholder rather than the credential. The authorization callback checks current Discord membership/roles and the current Redis policy on each command. It allows repository inspection, bot branch publication under `big-liquid/`, and draft PR creation; merges, force pushes, arbitrary API writes and repository administration are blocked.
+
+To enable this later:
+
+1. Create and attach a Vercel Connect GitHub App connector with **only selected repositories**, granting **Contents: read/write** and **Pull requests: read/write**.
+2. Set `CODING_GITHUB_CONNECTOR` to its actual connector UID (for example `github/big-liquid`). Use an installation for the intended GitHub organization.
+3. Set `CODING_ADMIN_ROLE_IDS` to comma-separated Discord role IDs and `CODING_REPOSITORIES` to comma-separated `owner/repo` names. Together with `DISCORD_GUILD_ID` and Redis credentials, these seed the policy **only if it does not already exist**. Later env changes do not overwrite dynamic permissions.
+4. Deploy and explicitly ask for a small change in an enabled repository. No connector, production grants or real PRs are created by installing this code.
+
+The `coding_access` tool manages the Redis policy:
+
+- Configured manager role holders may request changes in enabled repos, grant/revoke other server members, and update manager roles or enabled repositories.
+- User grants cover one repo or all enabled repos. They permit requesting changes, never granting access to others.
+- Membership/roles are verified with Discord on every action, including verified DMs. Ambient messages and scheduled/service callers cannot authorize GitHub commands or access changes.
+- Non-managers can list only their accessible repos. Policy mutations recheck manager roles against the latest Redis policy atomically and append an audit entry.
+
+Redis stores the policy at an environment/project/guild-scoped `bl:coding:…:policy` key and a capped 1,000-entry access audit. Eve manages session state and Sandbox files separately. The Sandbox uses 2 vCPUs and a 20-minute runtime timeout; this is not an overall coding-task deadline. `CODING_NETWORK_HOSTS` optionally replaces the package-registry/GitHub host allowlist for repositories needing other dependencies. Sandbox preparation and runtime need Vercel credentials; deployments supply these automatically, while local builds use the linked project's OIDC credentials. CI and human review determine whether a draft is ready to merge.
+
 ### Local agent development
 
 `npm run dev` starts Next.js and the Eve agent. `npm run agent:dev` runs the agent alone (normally on port 2000). To test Gateway messages locally, stop the production relay first, then in a second terminal:
