@@ -3,7 +3,8 @@ import { z } from "zod";
 import { directMessageMember } from "../discord-members";
 import { getRedis } from "../redis";
 
-export const repository = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.-]*\/[A-Za-z0-9][A-Za-z0-9_.-]*$/).transform(value => value.toLowerCase());
+import { repository } from "./repository";
+export { repository } from "./repository";
 export const discordId = z.string().regex(/^\d+$/);
 export const policySchema = z.object({
     roles: z.array(discordId), repositories: z.preprocess(value => value && typeof value === "object" && !Array.isArray(value) && !Object.keys(value).length ? [] : value, z.array(repository)),

@@ -121,14 +121,14 @@ test("no_reply ends a turn without a textual answer", () => {
 test("addressed messages bypass screening outside the allowlist", async () => {
     const accepted = await onDiscordMessage(context, { ...message, channelId: "999", addressed: true });
     assert.equal(accepted.auth.attributes.ambient, "false");
-    assert.equal(accepted.conversation, undefined);
+    assert.equal(accepted.conversation, "channel");
     assert.equal(requests.some((entry) => entry.url.includes("/decision-model")), false);
 });
 
 test("ambient messages receive selective-reply guidance in a shared channel session", async () => {
     const accepted = await onDiscordMessage(context, message);
     assert.equal(accepted.auth.attributes.ambient, "true");
-    assert.equal(accepted.conversation, "ambient");
+    assert.equal(accepted.conversation, "channel");
     assert(accepted.context.some((text) => text.includes("no_reply")));
     assert.deepEqual(posts, []);
 });

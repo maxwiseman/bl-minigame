@@ -36,7 +36,7 @@ beforeEach(() => {
             if (key.endsWith(":policy") && !policy) policy = typeof args[0] === "string" ? JSON.parse(args[0]) : args[0];
             return { result: "OK" };
         }
-        if (verb.toLowerCase() === "eval") return { result: evalResult };
+        if (verb.toLowerCase() === "eval") return { result: String(key).includes("fx-mailbox-poll") ? [] : evalResult };
         throw new Error(`Unexpected Redis operation: ${verb}`);
     };
     globalThis.fetch = async (url, options = {}) => {
@@ -201,4 +201,127 @@ test("native Git tool scopes Connect tokens, denies revoked users, and removes l
     assert.deepEqual(policies.at(-1), codingNetworkPolicy());
     assert(!JSON.stringify(commands).includes("secret-installation-test-only"));
     assert(removed.length >= 2);
+});
+
+const { HarnessAgent } = await import("@ai-sdk/harness/agent");
+const { runFxSlice } = await import("../agent/lib/coding/fx.ts");
+const { fxSandbox } = await import("../agent/lib/coding/fx-sandbox.ts");
+
+function sharedFxContext(origin = "https://github.com/ssta/ascent.git") {
+    const files = new Map([["/workspace/repo/main.txt", "written by main"]]);
+    let starts = 0, deleted = 0;
+    const sandbox = {
+        resolvePath: path => `/workspace/${path}`,
+        run: async () => ({ exitCode: 0, stdout: `${origin}\n`, stderr: "" }),
+        readTextFile: async ({ path }) => files.get(path) ?? null,
+        writeTextFile: async ({ path, content }) => files.set(path, content),
+        delete: async () => { deleted++; }, stop: async () => { deleted++; },
+    };
+    return { files, sandbox, counts: () => ({ starts, deleted }),
+        session: { id: "shared-eve-session", auth: { current: caller } }, callId: "coding-call", abortSignal: new AbortController().signal,
+        getSandbox: async () => { starts++; return sandbox; } };
+}
+
+const fxTask = { repository: "ssta/ascent", task: "Improve the camera status and run the relevant checks.", workingDirectory: "repo" };
+
+test("fx delegation checks Redis/Discord access before starting a sandbox", async () => {
+    roles = [];
+    const ctx = sharedFxContext();
+    await assert.rejects(runFxSlice(fxTask, null, ctx), /don't have coding access/);
+    assert.deepEqual(ctx.counts(), { starts: 0, deleted: 0 });
+});
+
+test("fx resumes with the same shared files and separate model, leaving the VM owned by Eve", async () => {
+    process.env.FX_MODEL = "test/coding-model"; process.env.AI_GATEWAY_API_KEY = "test-only";
+    const original = { create: HarnessAgent.prototype.createSession, generate: HarnessAgent.prototype.generate, continue: HarnessAgent.prototype.continueGenerate };
+    const ctx = sharedFxContext(); let activeSandbox, unfinished = true, destroyed = 0, prompts = 0, resumed = 0;
+    const checkpoint = { type: "resume-session", harnessId: "fx", specificationVersion: "harness-v1", data: { checkpoint: "opaque" } };
+    try {
+        HarnessAgent.prototype.createSession = async function (options) {
+            activeSandbox = options.sandboxSession; unfinished = !!(options.resumeFrom || options.continueFrom);
+            if (options.resumeFrom) { assert.deepEqual(options.resumeFrom, checkpoint); resumed++; }
+            return { hasUnfinishedTurn: () => unfinished, stop: async () => checkpoint, destroy: async () => { destroyed++; } };
+        };
+        HarnessAgent.prototype.generate = async function () {
+            prompts++; unfinished = true;
+            assert.equal(await activeSandbox.readTextFile({ path: "main.txt" }), "written by main");
+            await activeSandbox.writeTextFile({ path: "fx.txt", content: "partial fx edit" });
+            return { text: "first checks" };
+        };
+        HarnessAgent.prototype.continueGenerate = async function () {
+            assert.equal(await activeSandbox.readTextFile({ path: "fx.txt" }), "partial fx edit");
+            await activeSandbox.writeTextFile({ path: "fx.txt", content: "finished fx edit" }); unfinished = false;
+            return { text: "all checks passed" };
+        };
+        const first = await runFxSlice(fxTask, null, ctx);
+        assert.equal(first.done, false); assert.equal(first.progress.model, "test/coding-model");
+        process.env.FX_MODEL = "test/new-model";
+        const final = await runFxSlice(fxTask, first.progress, ctx);
+        assert.equal(final.done, true); assert.equal(final.result.model, "test/coding-model");
+        assert.equal(ctx.files.get("/workspace/repo/fx.txt"), "finished fx edit");
+        assert.match(final.result.report, /first checks[\s\S]*all checks passed/);
+        assert.equal(prompts, 1); assert.equal(resumed, 1); assert.equal(destroyed, 1);
+        assert.equal(ctx.counts().deleted, 0);
+        roles = [];
+        const before = ctx.counts().starts;
+        await assert.rejects(runFxSlice(fxTask, first.progress, ctx), /don't have coding access/);
+        assert.equal(ctx.counts().starts, before);
+    } finally {
+        HarnessAgent.prototype.createSession = original.create;
+        HarnessAgent.prototype.generate = original.generate;
+        HarnessAgent.prototype.continueGenerate = original.continue;
+        delete process.env.FX_MODEL;
+    }
+});
+
+test("fx rejects mismatched repositories and expired work without touching GitHub", async () => {
+    const ctx = sharedFxContext("https://github.com/other/private.git");
+    await assert.rejects(runFxSlice(fxTask, null, ctx), /not the requested GitHub checkout/);
+    const expired = { sessionId: "old", model: "test/model", startedAt: Date.now() - 19 * 60_000, summary: "" };
+    const clean = sharedFxContext();
+    await assert.rejects(runFxSlice(fxTask, expired, clean), /18-minute limit/);
+    assert.equal(clean.counts().starts, 0);
+    assert(!requests.some(request => request.url.startsWith("https://api.github.com")));
+});
+
+test("fx adapter forwards paths, bytes and cancellation into the existing sandbox", async () => {
+    const ctx = sharedFxContext(); const controller = new AbortController();
+    const adapter = fxSandbox(ctx.sandbox, "repo", controller.signal);
+    await adapter.writeTextFile({ path: "new.txt", content: "main can inspect this" });
+    assert.equal(ctx.files.get("/workspace/repo/new.txt"), "main can inspect this");
+    let observed;
+    ctx.sandbox.run = async options => { observed = options; return { exitCode: 0, stdout: "done", stderr: "" }; };
+    await adapter.run({ command: "npm test", env: { CHECK: "1" } });
+    assert.equal(observed.workingDirectory, "/workspace/repo"); assert.equal(observed.command, "npm test");
+    assert.deepEqual(observed.env, { CHECK: "1" });
+    controller.abort(); assert(observed.signal.aborted);
+    assert.throws(() => fxSandbox(ctx.sandbox, "../../outside"), /shared sandbox/);
+    assert.equal(ctx.counts().deleted, 0);
+});
+
+test("timed fx slices preserve continuation state without destroying the shared VM", async t => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    process.env.AI_GATEWAY_API_KEY = "test-only";
+    const original = { create: HarnessAgent.prototype.createSession, generate: HarnessAgent.prototype.generate };
+    const ctx = sharedFxContext(); let resolveResult, markStarted, destroyed = 0, unfinished = false;
+    const started = new Promise(resolve => { markStarted = resolve; });
+    const continuation = { type: "continue-turn", harnessId: "fx", specificationVersion: "harness-v1", data: { paused: true } };
+    try {
+        HarnessAgent.prototype.createSession = async () => ({
+            hasUnfinishedTurn: () => unfinished,
+            suspendTurn: async () => { resolveResult({ text: "paused safely" }); return continuation; },
+            destroy: async () => { destroyed++; },
+        });
+        HarnessAgent.prototype.generate = async () => {
+            unfinished = true; markStarted(); return new Promise(resolve => { resolveResult = resolve; });
+        };
+        const pending = runFxSlice(fxTask, null, ctx);
+        await started;
+        t.mock.timers.tick(60_000);
+        const result = await pending;
+        assert.equal(result.done, false);
+        assert.deepEqual(result.progress.continuation, continuation);
+        assert.equal(result.progress.resume, undefined);
+        assert.equal(destroyed, 0); assert.equal(ctx.counts().deleted, 0);
+    } finally { HarnessAgent.prototype.createSession = original.create; HarnessAgent.prototype.generate = original.generate; }
 });

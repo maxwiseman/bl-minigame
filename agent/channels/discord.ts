@@ -22,7 +22,7 @@ function speakerAuth(auth: ReturnType<typeof defaultDiscordAuth>, speaker: { gui
 
 // Keep replies in the channel, as /ask and announcements have always been.
 export default discordChannel({
-    turnPolicy: "queue",
+    turnPolicy: "steer",
     async onCommand(ctx, interaction) {
         if (interaction.commandName !== "ask") return null;
         const speaker = await resolveSpeaker(ctx, interaction.user, interaction.guildId, interaction.member);
@@ -69,7 +69,7 @@ export async function onDiscordMessage(ctx: DiscordContext, message: DiscordGate
     const auth = speakerAuth(defaultDiscordMessageAuth(message), speaker);
     return {
         auth: { ...auth, attributes: { ...auth.attributes, ambient: String(ambient) } },
-        ...(ambient ? { conversation: "ambient" } : {}),
+        conversation: "channel",
         context: [
             ...await memberContext(message.author, speaker.guildId, speaker.member),
             ...(speaker.direct ? [DIRECT_MESSAGE_CONTEXT] : []),

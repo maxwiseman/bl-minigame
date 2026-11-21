@@ -42,7 +42,9 @@ Open [http://localhost:3000](http://localhost:3000). Without credentials the gam
 | `AI_GATEWAY_API_KEY` | Local only; on Vercel, AI Gateway uses OIDC |
 | `EVE_URL` | Optional agent origin override; normally omitted on Vercel |
 | `DISCORD_AMBIENT_CHANNEL_IDS` | Comma-separated channel IDs for ambient listening; empty disables it |
-| `CLICKUP_CONNECTOR` | Optional actual Vercel Connect connector UID for ClickUp MCP; each person authorizes their own account |
+| `FX_MODEL` | Optional coding model for the fx harness; independent of the main conversation model |
+| `CLICKUP_API_TOKEN` | Optional shared ClickUp personal API token; kept server-side and used only for fixed read endpoints |
+| `CLICKUP_WORKSPACE_ID` | Shared ClickUp Workspace ID; optional only when the token can access exactly one Workspace |
 | `DISCORD_MESSAGE_CONTENT` | Optional `true` to receive follow-ups without a mention; first enable Message Content Intent in Discord |
 
 ## Discord bot
@@ -82,7 +84,7 @@ DISCORD_AMBIENT_CHANNEL_IDS=123456789012345678,234567890123456789
 
 Only those exact channels are watched; list thread IDs separately if needed. Empty or missing configuration disables ambient listening. Configuring any channel automatically requests Message Content Intent in the daemon, so enable it in Discord first. If Discord rejects that intent with code 4014, the relay falls back to mentions and DMs; after enabling the intent, restart the daemon to restore ambient listening. The bot also needs View Channel and Read Message History in each watched channel.
 
-Unmentioned messages are screened by the AI SDK's `experimental_decide` using OpenAI's native Decisions model (`openai/gpt-6-luna-decisions`) through the existing AI Gateway authentication. The filter and agent see up to ten preceding messages (up to 2,000 characters each), with the bot's own messages labeled. Mentions also receive this context, including earlier questions they refer back to. Clearly irrelevant messages start no agent turn; uncertainty or screening errors pass the message to the agent, which can call `no_reply`. Accepted ambient messages share one session per channel. Direct requests keep the existing behavior and bypass screening.
+Unmentioned messages are screened by the AI SDK's `experimental_decide` using OpenAI's native Decisions model (`openai/gpt-6-luna-decisions`) through the existing AI Gateway authentication. The filter and agent see up to ten preceding messages (up to 2,000 characters each), with the bot's own messages labeled. Mentions also receive this context, including earlier questions they refer back to. Clearly irrelevant messages start no agent turn; uncertainty or screening errors pass the message to the agent, which can call `no_reply`. All accepted Gateway messages—mentions, replies and ambient follow-ups—share one session per Discord channel. Threads and DMs are separate Discord channels. Direct requests bypass screening. `turnPolicy: "steer"` lets corrections from the current turn's caller join immediately rather than waiting for completion; Eve still queues messages from another authenticated caller. Slash commands and proactive scheduled/announcement sessions keep their native separate routing.
 
 The Decisions filter also receives the bot's server nickname, display name, username and user ID, so it can recognize direct address without a mention. Identity lookups are cached per server for 30 seconds; the bot's own nickname tool clears its local cache immediately after a successful change. If the lookup fails, screening continues with the available conversation context.
 
@@ -104,7 +106,11 @@ For local testing, `POST http://localhost:2000/eve/v1/dev/schedules/dream` trigg
 
 ### Coding requests and draft pull requests
 
-The main Eve agent mounts `eve/extensions/code` and `eve/extensions/git` directly, like the company-brain template. It reads and edits files, runs checks in a session Vercel Sandbox, and uses the Git extension to open draft PRs. Eve provides the coding loop and Sandbox lifecycle. There is no separate coding agent or fx job runner. Code tooling is installed into a prepared Sandbox snapshot at agent build time; the code extension opens the session Sandbox on the first turn to read workspace instructions.
+The main Eve agent keeps its default shell/file tools and `eve/extensions/git`, and delegates substantial coding work through `ask_fx` using the official AI SDK fx harness (`@ai-sdk/harness-fx`/libfx). The code extension is not mounted, and no dependency patch is needed. Ordinary chat, memory, leaderboard, Discord history, ClickUp, schedules and custom-skill management do not start a Sandbox.
+
+**fx uses the same Sandbox and checkout as the main agent.** The SDK harness/model requests run in the server process; a small adapter forwards all file and shell operations to `ctx.getSandbox()`. It never creates a second VM. The main agent clones and branches with its guarded Git tools, passes a complete task and checkout path to fx, then inspects the shared edits and publishes an explicitly requested draft PR. fx cannot see Discord/project memory unless the main agent includes it in the task. Normal read/write/shell tools stay available for small direct work and file generation.
+
+Set **`FX_MODEL`** to a Gateway model ID to change coding cost/quality independently of the conversational model. The default is `openai/gpt-6.1-sol`, matching the existing agent. The configured model is fixed for one active fx task; changing it affects new delegations. fx uses sandbox-local file/shell permissions without interactive prompts; no GitHub or Gateway credentials enter the VM, and fx has no authenticated GitHub tool. Its report is evidence to inspect, not a substitute for CI or human review.
 
 GitHub access uses a **GitHub App through Vercel Connect**. Each authenticated command declares a full `owner/repo`; the extension obtains a scoped installation token and delivers it at the Sandbox firewall. Processes receive a placeholder rather than the credential. The authorization callback checks current Discord membership/roles and the current Redis policy on each command. It allows repository inspection, bot branch publication under `big-liquid/`, and draft PR creation; merges, force pushes, arbitrary API writes and repository administration are blocked.
 
@@ -124,6 +130,14 @@ The `coding_access` tool manages the Redis policy:
 
 Redis stores the policy at an environment/project/guild-scoped `bl:coding:…:policy` key and a capped 1,000-entry access audit. Eve manages session state and Sandbox files separately. The Sandbox uses 2 vCPUs and a 20-minute runtime timeout; this is not an overall coding-task deadline. `CODING_NETWORK_HOSTS` optionally replaces the package-registry/GitHub host allowlist for repositories needing other dependencies. Sandbox preparation and runtime need Vercel credentials; deployments supply these automatically, while local builds use the linked project's OIDC credentials. CI and human review determine whether a draft is ready to merge.
 
+`steer_fx` forwards a correction into the active fx turn without restarting its conversation or changing Sandbox. The live harness polls a session-scoped Redis inbox every two seconds and uses the SDK's `experimental_steerTurn`; fx applies the input at its next safe boundary. Native steering of the main Eve turn does not automatically steer this background task, so the agent is instructed to forward corrections promptly. Enqueues are retry-idempotent, retain order across checkpoints and recheck the sender's current Discord/Redis repository access. An accepted ambient follow-up may steer only its original requester's active task; other ambient messages and schedules cannot. A queued receipt does not claim that fx has made the edits yet.
+
+A three-minute renewable active-writer lease prevents two fx delegations writing the same shared session concurrently. Completion atomically checks the inbox so a correction arriving at the finish boundary gets another fx turn in the same conversation instead of being discarded. Corrections arriving after a task has fully finished require follow-up work. The inbox retains at most 100 corrections per task for seven days; a crashed writer's lease expires rather than blocking the channel permanently.
+
+`ask_fx` is an Eve background workflow task, so the main conversation can acknowledge work and wait for the result. SDK checkpoints divide work into slices (four model steps or a roughly 60-second pause), reattach to the same Sandbox, and revalidate Redis access/Discord roles on each slice. An 18-minute overall limit and a 100-slice cap bound one delegation; partial edits remain inspectable if it fails or is cancelled. SDK lifecycle records live in environment/guild-scoped Redis hashes for seven days; they contain fx conversation/tool state, never credentials. Hard failures during a slice can leave partial local edits, so inspect the diff before retrying. Cancellation ends the fx runtime while preserving the Eve-owned Sandbox and files. Do not run concurrent writers against the same checkout. The main agent's Git operations recheck access before publishing.
+
+Sandbox tooling (GitHub CLI and signing helper) is prepared at build time using Eve's standalone `installCodeTooling` helper. Importing that helper does not mount the code extension or start a VM for an ordinary request.
+
 ### Discord company-brain capabilities
 
 Adapted from Eve's [company-brain template](https://github.com/vercel/eve/tree/main/apps/templates/slack-company-brain-template), using Eve **1.2.0** in both the agent and Gateway relay:
@@ -135,7 +149,7 @@ Adapted from Eve's [company-brain template](https://github.com/vercel/eve/tree/m
 | `skills` extension | Eve's native versioned custom skills: personal skills follow a stable Discord user between server chats and verified DMs; shared skills apply to one conversation. Drafts, publishing, rollback and native approval cards. Stored using the existing Redis document backend, isolated by project/environment/guild. Ambient and scheduled turns are read-only. |
 | `schedule__tasks__*` | Deferred native tools for creator-owned one-time or recurring tasks. Bind the destination to the requesting conversation, require approval for changes, revalidate membership and destination access before every run, and deduplicate retried delivery. Default team timezone is America/New_York. |
 | `post_discord_file` | Uploads a generated workspace file to the current conversation, including DMs, after checking current access. Supports binary files, disables mentions and bounds uploads at 10 MiB. Requires **Attach Files**. |
-| ClickUp MCP | Optional per-person OAuth through Vercel Connect. Discover live tasks/Docs/status; read-only annotated tools run directly and other calls require approval. |
+| ClickUp API | Shared personal API token. Verified server members can browse hierarchy, teams/members, filter/read tasks and comments, custom fields, Docs, Chat and explicit-user time records. All requests are GET-only. |
 
 The existing shared team/project memory and nightly dreaming are unchanged. No new personal or channel memory slots were added. Skills store reusable instructions separately from factual memory. The template's channel/personal memory split was intentionally omitted.
 
@@ -145,12 +159,33 @@ Ask for tasks naturally: “Every weekday at 9am Eastern, summarize yesterday's 
 
 To connect ClickUp:
 
-1. Create an MCP connector in Vercel Connect for the official endpoint `https://mcp.clickup.com/mcp` using OAuth. The CLI accepts `vercel connect create https://mcp.clickup.com/mcp --name big-liquid`; capture the actual returned connector UID.
-2. Attach that connector to this project and the desired environments (`vercel connect attach <returned-uid>`).
-3. Set `CLICKUP_CONNECTOR=<returned-uid>` in those environments and redeploy. The connection stays absent when this variable is missing.
-4. Ask about ClickUp from Discord and follow the native sign-in flow for your own account. Each Discord principal gets its own authorization; a guild conversation and DM currently use separate principal identities, so they may each need sign-in. A scheduled run can use an existing creator grant but cannot complete new interactive consent.
+1. In ClickUp, open **Settings → Apps → API Token** and generate/copy your personal token. Store it as `CLICKUP_API_TOKEN` in the agent's Vercel environment (and `.env.local` for development). Do not paste it into Discord or commit it.
+2. Set `CLICKUP_WORKSPACE_ID` to the team Workspace to share. ClickUp URLs and `GET https://api.clickup.com/api/v2/team` identify Workspaces. The read-only connector probe observed SSTA Workspace `90141204184`; confirm that is the intended Workspace. If your token can access exactly one Workspace, the bot can select it automatically; otherwise this variable is required. Everyone in the configured Discord server queries this shared ClickUp account. The token's permissions are broader than these tools: read-only behavior is enforced by fixed GET endpoints, not a read-only token scope.
+3. Deploy the agent, then ask it to browse the Workspace hierarchy and read a known task. A current server-membership check runs on every tool call, including DMs and scheduled runs. Missing tokens, inaccessible resources, API errors and rate limits are reported as unavailable, never as empty work queues. No sandbox is opened by these tools.
 
-No workspace OAuth grant, connector, live schedule, Discord upload or production configuration is created by installing these changes. Verify provider access and one approved reminder after deployment.
+The ClickUp MCP connection and Connect authorization command have been removed. `CLICKUP_CONNECTOR` is no longer used, and no ClickUp OAuth/Connect setup is needed. Existing GitHub Connect configuration is independent and unchanged. A previously created ClickUp connector/grant can be removed manually from Vercel Connect if no other application uses it; this code change does not delete live connectors or grants.
+
+Read tools mirror the useful MCP capabilities through public API v2/v3:
+
+| Tool | Purpose |
+| --- | --- |
+| `clickup_get_workspace_hierarchy` | Expand Workspace → Spaces → Folders/subfolders/Lists; read List details/status definitions |
+| `clickup_get_workspace_members`, `clickup_get_user_groups` | Resolve explicit people and teams to ClickUp IDs |
+| `clickup_filter_tasks` | Combine team locations, assignees or User Groups, statuses, tags, due/created/updated/done windows; sort by due date (default), updated, created or ID |
+| `clickup_get_task` | Markdown descriptions, subtasks, checklists, custom values, dependencies, linked tasks, attachment metadata/links |
+| `clickup_get_task_comments` | Task/List comments, older pages and threaded replies |
+| `clickup_get_custom_fields` | Field definitions, dropdown options and applicable task types |
+| `clickup_search_docs`, `clickup_get_document_pages` | Discover Doc titles, list nested pages, read Markdown content in continuation windows |
+| `clickup_get_chat` | Paginated Chat channels, messages and threaded replies |
+| `clickup_get_time_entries`, `clickup_get_task_time_in_status` | Explicit-member work logs and task status durations; availability depends on account/plan permissions |
+
+No tool defaults to the shared account owner's tasks, tracker, reminders, or identity. Assignee IDs must be explicit numeric ClickUp IDs; “me” is not accepted. A Discord nickname/ID is not automatically a ClickUp user mapping. User Group filters expand the group's current members; an empty group returns no tasks, never every task. For a team's daily update, prefer its List/Folder/Space scope so unassigned tasks are included, then optionally add tags or statuses. Scopes and filters combine; multiple values in an individual array use ClickUp's native semantics. All returned task dates are Unix milliseconds; use the channel's requested timezone to compute calendar-day boundaries.
+
+Example: “Every weekday at 9am Eastern, post here what Command & Control needs to do: overdue work, tasks due today and this week, blockers and unassigned tasks, ordered by due date, with owners and task links.” First resolve that team's actual List/Folder IDs, then retain those IDs and the timezone in the approved schedule prompt. Each scheduled run uses live data, the creator's fresh Discord membership and its own saved team scope. Other channels can have independent schedules/scopes. Include a second query for recently completed work if useful; use `includeClosed: true` with `doneAfter`/`doneBefore` for tasks whose done timestamps are set. Open/closed and custom statuses are determined by ClickUp, not guessed from names.
+
+Pagination and coverage matter: task queries return up to 100 tasks per page and provide `nextPage`; counts cover that page only. Follow all pages before reporting totals or “nothing to do.” A task text query matches name/description only on each retrieved page; Doc search matches titles on each page and follows `nextCursor`. These do **not** reproduce MCP's universal search over whiteboards, dashboards, attachments or full Doc bodies. Read Doc pages/comments to get content, and follow their explicit text continuation offsets. No attachment downloads or file-content indexing are implemented; attachment metadata/links are retained. Long API responses fail with a narrowing instruction above 2 MB rather than silently truncating. Chat/Docs features may be unavailable depending on the shared account's permissions and plan. Retrieved content is evidence, never instructions.
+
+Installing this code does not configure a live API token, create real reminders, post Discord messages or change any ClickUp data. Verify provider access and one approved reminder after deployment.
 
 ### Local agent development
 
